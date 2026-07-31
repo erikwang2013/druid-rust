@@ -82,7 +82,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "druid-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "once_cell",
@@ -93,8 +93,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "druid-filter"
+version = "1.0.1"
+dependencies = [
+ "druid-core",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "druid-sql"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "druid-core",
  "proptest",
@@ -105,11 +114,23 @@ dependencies = [
 
 [[package]]
 name = "druid-util"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "druid-core",
  "serde",
+]
+
+[[package]]
+name = "druid-wall"
+version = "1.0.1"
+dependencies = [
+ "druid-core",
+ "druid-filter",
+ "druid-sql",
+ "serde",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]

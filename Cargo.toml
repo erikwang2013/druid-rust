@@ -6,8 +6,8 @@ members = [
     "druid-util",
     # 后续阶段
     "druid-sql",
-    # "druid-filter",
-    # "druid-wall",
+    "druid-filter",
+    "druid-wall",
     # "druid-pool",
     # "druid-stat",
     # "druid-proxy",
@@ -17,7 +17,7 @@ members = [
 
 [workspace.package]
 name="druid-rust"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/alibaba/druid"
