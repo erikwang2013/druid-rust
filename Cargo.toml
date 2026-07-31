@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.0.7"
+version = "1.0.8"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/alibaba/druid"
@@ -45,9 +45,6 @@ thiserror = "2"
 # 日志/追踪
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
-
-# 同步原语
-parking_lot = "0.12"
 
 # 测试
 criterion = "0.5"

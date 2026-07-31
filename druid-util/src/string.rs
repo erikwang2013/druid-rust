@@ -9,8 +9,10 @@ pub fn camel_to_snake(s: &str) -> String {
         let c = chars[i];
         if c.is_uppercase() {
             // 处理连续大写（缩写词）：URLParser → url_parser
-            if i > 0 && (!chars[i - 1].is_uppercase() ||
-                (i + 1 < chars.len() && chars[i + 1].is_lowercase())) {
+            if i > 0
+                && (!chars[i - 1].is_uppercase()
+                    || (i + 1 < chars.len() && chars[i + 1].is_lowercase()))
+            {
                 result.push('_');
             }
             result.push(c.to_lowercase().next().unwrap_or(c));

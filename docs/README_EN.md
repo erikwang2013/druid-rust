@@ -388,7 +388,7 @@ Latest code review: [REVIEW_REPORT.md](REVIEW_REPORT.md)
 - `cargo check`: ✅ Zero warnings
 - `cargo clippy --all-targets`: ✅ Zero warnings
 - `cargo test`: ✅ 61/61 passed
-- `cargo fmt --all`: ✅ Consistent formatting
+- `cargo fmt --check`: ✅ Consistent formatting
 
 ## License
 

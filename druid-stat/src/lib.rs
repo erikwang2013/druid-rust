@@ -120,21 +120,31 @@ impl Filter for StatFilter {
     }
 
     fn connection_created(&self, _ctx: &FilterContext) {
-        self.ds_stat.lock().unwrap().create_count += 1;
+        let mut stat = self.ds_stat.lock().unwrap();
+        stat.create_count += 1;
+        stat.idle_count += 1;
     }
 
     fn connection_borrowed(&self, _ctx: &FilterContext, wait_ms: u64) {
         let mut stat = self.ds_stat.lock().unwrap();
         stat.borrow_count += 1;
         stat.total_wait_time_ms += wait_ms;
+        stat.active_count += 1;
+        stat.idle_count = stat.idle_count.saturating_sub(1);
     }
 
     fn connection_returned(&self, _ctx: &FilterContext) {
-        self.ds_stat.lock().unwrap().return_count += 1;
+        let mut stat = self.ds_stat.lock().unwrap();
+        stat.return_count += 1;
+        stat.active_count = stat.active_count.saturating_sub(1);
+        stat.idle_count += 1;
     }
 
     fn connection_closed(&self, _ctx: &FilterContext) {
-        self.ds_stat.lock().unwrap().destroy_count += 1;
+        let mut stat = self.ds_stat.lock().unwrap();
+        stat.destroy_count += 1;
+        stat.active_count = stat.active_count.saturating_sub(1);
+        stat.idle_count = stat.idle_count.saturating_sub(1);
     }
 
     fn statement_execute_before(&self, _ctx: &FilterContext) -> Result<(), DruidError> {

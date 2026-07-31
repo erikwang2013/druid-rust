@@ -287,7 +287,6 @@ async-trait = "0.1"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
-parking_lot = "0.12"
 criterion = "0.5"
 chrono = { version = "0.4", features = ["serde"] }
 ```
@@ -320,6 +319,6 @@ druid-core ───────────────────────
 ---
 
 **创建日期**: 2026-07-31
-**状态**: 全部阶段已完成 (v1.0.7)
+**状态**: 全部阶段已完成 (v1.0.8)
 **审查报告**: [REVIEW_REPORT.md](REVIEW_REPORT.md)
 **基于**: alibaba/druid v1.2.24, coding-to-rust/java-to-rust v2026-07-30

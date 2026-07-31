@@ -1,7 +1,7 @@
 # Druid Rust
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-49%20passed-green)]()
+[![Tests](https://img.shields.io/badge/tests-61%20passed-green)]()
 
 [English Documentation](docs/README_EN.md) | 中文文档
 
@@ -454,7 +454,7 @@ impl Filter for MyLogFilter {
 
 ```toml
 [workspace.package]
-version = "1.0.7"
+version = "1.0.8"
 ```
 
 所有 10 个子 crate 通过 `version.workspace = true` 继承，修改版本号只需改一处。
@@ -511,7 +511,7 @@ cargo run --example basic
 - `cargo check`: ✅ 零警告
 - `cargo clippy --all-targets`: ✅ 零警告
 - `cargo test`: ✅ 61/61 通过
-- `cargo fmt --all`: ✅ 格式一致
+- `cargo fmt --check`: ✅ 格式一致
 
 ## License
 

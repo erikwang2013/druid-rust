@@ -39,7 +39,7 @@ pub struct DruidDataSource<D: Driver> {
     semaphore: Arc<Semaphore>,
     inner: Arc<Mutex<PoolInner<D::Connection>>>,
     filter_chain: Arc<FilterChain>,
-    metrics: PoolMetrics,
+    metrics: Arc<PoolMetrics>,
     pscache: Mutex<PSCache>,
     next_id: AtomicU64,
     inited: AtomicBool,
@@ -63,7 +63,7 @@ impl<D: Driver> DruidDataSource<D> {
             semaphore: Arc::new(Semaphore::new(max)),
             inner: Arc::new(Mutex::new(PoolInner::new())),
             filter_chain: fc,
-            metrics: PoolMetrics::new(),
+            metrics: Arc::new(PoolMetrics::new()),
             pscache: Mutex::new(PSCache::new(ps_cache_size)),
             next_id: AtomicU64::new(1),
             inited: AtomicBool::new(false),
@@ -90,6 +90,7 @@ impl<D: Driver> DruidDataSource<D> {
         if self.config.time_between_eviction_runs_ms > 0 {
             let inner = self.inner.clone();
             let fchain = self.filter_chain.clone();
+            let metrics = self.metrics.clone();
             let max_ms = self.config.max_evictable_idle_time_ms;
             let min_idle = self.config.min_idle;
             let interval = self.config.eviction_interval();
@@ -105,6 +106,7 @@ impl<D: Driver> DruidDataSource<D> {
                         if should {
                             if let Some(e) = g.idle.pop_front() {
                                 fchain.connection_closed(e.id);
+                                metrics.set_idle(g.idle.len());
                                 let c = e.conn.clone();
                                 tokio::spawn(async move {
                                     let _ = c.close().await;
@@ -194,7 +196,8 @@ impl<D: Driver> DruidDataSource<D> {
         };
 
         self.metrics.inc_borrow();
-        self.metrics.add_wait_time_ns(start.elapsed().as_nanos() as u64);
+        self.metrics
+            .add_wait_time_ns(start.elapsed().as_nanos() as u64);
         self.filter_chain.connection_borrowed(conn_id, wait_ms);
 
         if self.config.test_on_borrow {
@@ -207,6 +210,7 @@ impl<D: Driver> DruidDataSource<D> {
             permit: Some(permit),
             inner: self.inner.clone(),
             filter_chain: self.filter_chain.clone(),
+            metrics: self.metrics.clone(),
         })
     }
 
@@ -281,6 +285,7 @@ pub struct PoolGuard<C: Connection> {
     permit: Option<tokio::sync::OwnedSemaphorePermit>,
     inner: Arc<Mutex<PoolInner<C>>>,
     filter_chain: Arc<FilterChain>,
+    metrics: Arc<PoolMetrics>,
 }
 
 impl<C: Connection> PoolGuard<C> {
@@ -296,6 +301,7 @@ impl<C: Connection> Drop for PoolGuard<C> {
     fn drop(&mut self) {
         let mut g = self.inner.lock().unwrap();
         g.active_count = g.active_count.saturating_sub(1);
+        self.metrics.set_active(g.active_count);
         if !g.closed {
             self.filter_chain.connection_returned(self.conn_id);
             g.idle.push_back(PoolEntry {
@@ -303,8 +309,10 @@ impl<C: Connection> Drop for PoolGuard<C> {
                 last_used_at: Instant::now(),
                 id: self.conn_id,
             });
+            self.metrics.set_idle(g.idle.len());
         } else {
             self.filter_chain.connection_closed(self.conn_id);
+            self.metrics.set_idle(g.idle.len());
             let c = self.conn.clone();
             if let Ok(handle) = tokio::runtime::Handle::try_current() {
                 tokio::task::spawn_blocking(move || {

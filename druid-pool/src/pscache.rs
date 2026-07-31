@@ -46,10 +46,13 @@ impl PSCache {
                 self.cache.remove(&key);
             }
         }
-        self.cache.insert(sql.to_string(), PSEntry {
-            sql: sql.to_string(),
-            hit_count: 0,
-        });
+        self.cache.insert(
+            sql.to_string(),
+            PSEntry {
+                sql: sql.to_string(),
+                hit_count: 0,
+            },
+        );
     }
 
     pub fn len(&self) -> usize {

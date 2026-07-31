@@ -276,8 +276,27 @@ mod tests {
 
     #[tokio::test]
     async fn test_mark_down_up() {
-        let ha = HighAvailableDataSource::<MockHaDriver>::new();
-        // No nodes yet so nothing to mark
-        assert_eq!(ha.node_count(), 0);
+        let mut ha = HighAvailableDataSource::new();
+        let mut cfg = druid_core::DruidConfig::new("mock://n1", "u", "p");
+        cfg.initial_size = 0;
+        cfg.max_active = 1;
+        cfg.test_on_borrow = false;
+        let ds = DruidDataSource::new(MockHaDriver::new(), cfg);
+        let _ = ds.init().await;
+        ha.add_node("node-1", ds, 1);
+
+        assert_eq!(ha.node_count(), 1);
+        assert_eq!(ha.active_count(), 1);
+
+        ha.mark_down("node-1");
+        assert_eq!(ha.active_count(), 0);
+
+        ha.mark_up("node-1");
+        assert_eq!(ha.active_count(), 1);
+
+        // mark non-existent node should not panic
+        ha.mark_down("node-x");
+        ha.mark_up("node-x");
+        assert_eq!(ha.node_count(), 1);
     }
 }
