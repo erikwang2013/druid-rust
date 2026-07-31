@@ -15,6 +15,23 @@ pub fn format_statement(stmt: &SQLStatement) -> String {
 
 fn format_select(stmt: &SelectStatement) -> String {
     let mut s = String::new();
+    if !stmt.with_cte.is_empty() {
+        s.push_str("WITH ");
+        let ctes: Vec<String> = stmt
+            .with_cte
+            .iter()
+            .map(|cte| {
+                let mut def = cte.name.clone();
+                if !cte.columns.is_empty() {
+                    def.push_str(&format!(" ({})", cte.columns.join(", ")));
+                }
+                def.push_str(&format!(" AS ({})", format_select(&cte.query)));
+                def
+            })
+            .collect();
+        s.push_str(&ctes.join(", "));
+        s.push(' ');
+    }
     s.push_str("SELECT ");
     if stmt.distinct {
         s.push_str("DISTINCT ");

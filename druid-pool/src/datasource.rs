@@ -150,18 +150,27 @@ impl<D: Driver> DruidDataSource<D> {
             let handle = tokio::spawn(async move {
                 loop {
                     tokio::time::sleep(interval).await;
-                    let conns: Vec<Arc<D::Connection>> = {
+                    // 收集 (id, last_used_at, conn) 快照用于外部验证
+                    let snapshots: Vec<(u64, Instant, Arc<D::Connection>)> = {
                         let g = inner.lock().unwrap_or_else(|e| e.into_inner());
-                        g.idle.iter().map(|e| e.conn.clone()).collect()
+                        g.idle
+                            .iter()
+                            .map(|e| (e.id, e.last_used_at, e.conn.clone()))
+                            .collect()
                     };
-                    for conn in &conns {
+                    for (conn_id, last_used_snapshot, conn) in &snapshots {
                         if let Err(e) = driver.validate(conn).await {
                             tracing::warn!(
-                                "KeepAlive validation failed: {}, evicting connection",
+                                "KeepAlive validation failed for conn {}: {}, evicting",
+                                conn_id,
                                 e
                             );
                             let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
-                            g.idle.retain(|entry| !Arc::ptr_eq(&entry.conn, conn));
+                            // 仅驱逐仍在 idle 中且 last_used_at 未变化的连接
+                            // （若 last_used_at 已变，说明连接被 borrow 并归还过，不再驱逐）
+                            g.idle.retain(|entry| {
+                                entry.id != *conn_id || entry.last_used_at != *last_used_snapshot
+                            });
                             if let Ok(handle) = tokio::runtime::Handle::try_current() {
                                 let c = conn.clone();
                                 handle.spawn(async move {
@@ -199,15 +208,23 @@ impl<D: Driver> DruidDataSource<D> {
         let permit = if let Some(max_wait) = self.config.max_wait() {
             match tokio::time::timeout(max_wait, self.semaphore.clone().acquire_owned()).await {
                 Ok(Ok(p)) => p,
-                Ok(Err(_)) => return Err(DruidError::Pool("semaphore closed".into())),
-                Err(_) => return Err(DruidError::Pool("connection wait timeout".into())),
+                Ok(Err(_)) => {
+                    self.metrics.dec_waiting();
+                    return Err(DruidError::Pool("semaphore closed".into()));
+                }
+                Err(_) => {
+                    self.metrics.dec_waiting();
+                    return Err(DruidError::Pool("connection wait timeout".into()));
+                }
             }
         } else {
-            self.semaphore
-                .clone()
-                .acquire_owned()
-                .await
-                .map_err(|_| DruidError::Pool("semaphore closed".into()))?
+            match self.semaphore.clone().acquire_owned().await {
+                Ok(p) => p,
+                Err(_) => {
+                    self.metrics.dec_waiting();
+                    return Err(DruidError::Pool("semaphore closed".into()));
+                }
+            }
         };
 
         let wait_ms = start.elapsed().as_millis() as u64;
@@ -260,6 +277,7 @@ impl<D: Driver> DruidDataSource<D> {
                             let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
                             g.active_count = g.active_count.saturating_sub(1);
                             self.metrics.set_active(g.active_count);
+                            self.metrics.dec_waiting();
                             return Err(e);
                         }
                     };

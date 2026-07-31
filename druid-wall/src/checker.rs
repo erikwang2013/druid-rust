@@ -180,6 +180,12 @@ impl WallChecker {
         fn visit_stmt(stmt: &SQLStatement, deny: &[String]) -> Option<WallCheckResult> {
             match stmt {
                 SQLStatement::Select(s) => {
+                    for cte in &s.with_cte {
+                        if let Some(r) = visit_stmt(&SQLStatement::Select(cte.query.clone()), deny)
+                        {
+                            return Some(r);
+                        }
+                    }
                     for item in &s.columns {
                         if let druid_sql::ast::SelectItem::Expr(e, _) = item {
                             if let Some(r) = visit(e, deny) {

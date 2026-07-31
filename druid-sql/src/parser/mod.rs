@@ -63,17 +63,19 @@ impl Parser {
 
     fn parse_select(&mut self) -> ParseResult<SelectStatement> {
         let mut distinct = false;
+        let mut with_cte = Vec::new();
         if self.current == Token::With {
             self.advance();
             if self.current == Token::Recursive {
                 self.advance();
             }
             loop {
-                self.parse_ident()?;
+                let cte_name = self.parse_ident()?;
+                let mut cte_cols = Vec::new();
                 if self.current == Token::LParen {
                     self.advance();
                     loop {
-                        self.parse_ident()?;
+                        cte_cols.push(self.parse_ident()?);
                         if self.current == Token::Comma {
                             self.advance();
                         } else {
@@ -84,8 +86,13 @@ impl Parser {
                 }
                 self.expect(Token::As)?;
                 self.expect(Token::LParen)?;
-                let _ = self.parse_select()?;
+                let cte_query = self.parse_select()?;
                 self.expect(Token::RParen)?;
+                with_cte.push(CteDef {
+                    name: cte_name,
+                    columns: cte_cols,
+                    query: Box::new(cte_query),
+                });
                 if self.current == Token::Comma {
                     self.advance();
                 } else {
@@ -185,6 +192,7 @@ impl Parser {
         };
 
         Ok(SelectStatement {
+            with_cte,
             distinct,
             columns,
             from,

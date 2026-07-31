@@ -150,7 +150,15 @@ pub enum SQLStatement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct CteDef {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub query: Box<SelectStatement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct SelectStatement {
+    pub with_cte: Vec<CteDef>,
     pub distinct: bool,
     pub columns: Vec<SelectItem>,
     pub from: Option<TableReference>,

@@ -20,6 +20,9 @@ impl SchemaVisitor {
 
     /// 访问 SELECT 语句
     pub fn visit_select(&mut self, stmt: &SelectStatement) {
+        for cte in &stmt.with_cte {
+            self.visit_select(&cte.query);
+        }
         if let Some(ref from) = stmt.from {
             self.visit_table_ref(from);
         }
