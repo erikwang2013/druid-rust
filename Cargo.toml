@@ -9,15 +9,15 @@ members = [
     "druid-filter",
     "druid-wall",
     "druid-pool",
-    # "druid-stat",
+    "druid-stat",
     # "druid-proxy",
     # "druid-ha",
-    # "druid-console",
+    "druid-console",
 ]
 
 [workspace.package]
 name="druid-rust"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/alibaba/druid"
