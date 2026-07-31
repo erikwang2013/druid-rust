@@ -20,26 +20,60 @@ pub struct PoolMetrics {
 }
 
 impl PoolMetrics {
-    pub fn new() -> Self { PoolMetrics::default() }
+    pub fn new() -> Self {
+        PoolMetrics::default()
+    }
 
-    pub fn set_active(&self, n: usize) { self.active_count.store(n as u64, Ordering::Relaxed); }
-    pub fn set_idle(&self, n: usize) { self.idle_count.store(n as u64, Ordering::Relaxed); }
-    pub fn inc_waiting(&self) { self.waiting_count.fetch_add(1, Ordering::Relaxed); }
-    pub fn dec_waiting(&self) { self.waiting_count.fetch_sub(1, Ordering::Relaxed); }
-    pub fn inc_borrow(&self) { self.borrow_count.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_create(&self) { self.create_count.fetch_add(1, Ordering::Relaxed); }
-    pub fn inc_destroy(&self) { self.destroy_count.fetch_add(1, Ordering::Relaxed); }
-    pub fn add_wait_time_ns(&self, ns: u64) { self.total_wait_ns.fetch_add(ns, Ordering::Relaxed); }
+    pub fn set_active(&self, n: usize) {
+        self.active_count.store(n as u64, Ordering::Relaxed);
+    }
+    pub fn set_idle(&self, n: usize) {
+        self.idle_count.store(n as u64, Ordering::Relaxed);
+    }
+    pub fn inc_waiting(&self) {
+        self.waiting_count.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn dec_waiting(&self) {
+        self.waiting_count.fetch_sub(1, Ordering::Relaxed);
+    }
+    pub fn inc_borrow(&self) {
+        self.borrow_count.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_create(&self) {
+        self.create_count.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_destroy(&self) {
+        self.destroy_count.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn add_wait_time_ns(&self, ns: u64) {
+        self.total_wait_ns.fetch_add(ns, Ordering::Relaxed);
+    }
 
     // Getters
-    pub fn active(&self) -> u64 { self.active_count.load(Ordering::Relaxed) }
-    pub fn idle(&self) -> u64 { self.idle_count.load(Ordering::Relaxed) }
-    pub fn waiting(&self) -> u64 { self.waiting_count.load(Ordering::Relaxed) }
-    pub fn borrow_count(&self) -> u64 { self.borrow_count.load(Ordering::Relaxed) }
-    pub fn create_count(&self) -> u64 { self.create_count.load(Ordering::Relaxed) }
-    pub fn destroy_count(&self) -> u64 { self.destroy_count.load(Ordering::Relaxed) }
+    pub fn active(&self) -> u64 {
+        self.active_count.load(Ordering::Relaxed)
+    }
+    pub fn idle(&self) -> u64 {
+        self.idle_count.load(Ordering::Relaxed)
+    }
+    pub fn waiting(&self) -> u64 {
+        self.waiting_count.load(Ordering::Relaxed)
+    }
+    pub fn borrow_count(&self) -> u64 {
+        self.borrow_count.load(Ordering::Relaxed)
+    }
+    pub fn create_count(&self) -> u64 {
+        self.create_count.load(Ordering::Relaxed)
+    }
+    pub fn destroy_count(&self) -> u64 {
+        self.destroy_count.load(Ordering::Relaxed)
+    }
     pub fn avg_wait_ms(&self) -> f64 {
         let count = self.borrow_count();
-        if count == 0 { 0.0 } else { self.total_wait_ns.load(Ordering::Relaxed) as f64 / count as f64 / 1_000_000.0 }
+        if count == 0 {
+            0.0
+        } else {
+            self.total_wait_ns.load(Ordering::Relaxed) as f64 / count as f64 / 1_000_000.0
+        }
     }
 }

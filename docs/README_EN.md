@@ -17,6 +17,7 @@
 - [Configuration Reference](#configuration-reference)
 - [Java to Rust Migration](#java-to-rust-migration)
 - [Development & Testing](#development--testing)
+- [Review Report](#review-report)
 
 ## Architecture
 
@@ -103,7 +104,8 @@ druid-rust/
 ├── Cargo.toml             # Workspace root (10 crates)
 ├── docs/
 │   ├── PLAN.md            # Migration plan
-│   └── README_EN.md       # English docs (this file)
+│   ├── README_EN.md       # English docs (this file)
+│   └── REVIEW_REPORT.md   # Code review report
 │
 ├── druid-core/            # Foundation: DruidError, DbType, DruidConfig
 ├── druid-util/            # Utilities: SQL, string, crypto, time tools
@@ -151,7 +153,7 @@ druid-proxy   → druid-pool    druid-util
 |---------|----------|
 | Lexer | 80+ token types (keywords, identifiers, literals, operators, comments) |
 | Recursive descent | SELECT/JOIN/WHERE/GROUP/ORDER/LIMIT/INSERT/UPDATE/DELETE/CREATE/DROP |
-| Expressions | Arithmetic/comparison/logical/CASE WHEN/subqueries/IN/BETWEEN/LIKE/EXISTS/aggregates |
+| Expressions | Arithmetic/comparison/logical/CASE WHEN/subqueries/IN/NOT IN/BETWEEN/NOT BETWEEN/LIKE/NOT LIKE/EXISTS/aggregates |
 | Dialects | 30 dialects (MySQL, PostgreSQL, Oracle, SQLServer, DB2, H2, ClickHouse, ...) |
 | Schema visitor | Table and column reference extraction |
 | Formatter | AST ↔ SQL bidirectional conversion |
@@ -187,8 +189,8 @@ druid-proxy   → druid-pool    druid-util
 
 ```toml
 [dependencies]
-druid-core = "0.1"
-druid-pool = "0.1"
+druid-core = "1.0"
+druid-pool = "1.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -291,8 +293,8 @@ impl Filter for MyFilter {
 | `max_active` | usize | 8 | Max active |
 | `max_wait_ms` | u64 | 0 | Max wait (0=∞) |
 | `time_between_eviction_runs_ms` | u64 | 60000 | Eviction interval |
-| `min_evictable_idle_time_ms` | u64 | 0 | Min idle before eviction |
-| `max_evictable_idle_time_ms` | u64 | 0 | Max idle before eviction |
+| `min_evictable_idle_time_ms` | u64 | 1800000 | Min idle before eviction (30min) |
+| `max_evictable_idle_time_ms` | u64 | 25200000 | Max idle before eviction (7h) |
 | `test_on_borrow` | bool | true | Validate on borrow |
 | `test_on_return` | bool | false | Validate on return |
 | `keep_alive` | bool | false | Enable KeepAlive |
@@ -342,11 +344,25 @@ Key differences from Java:
 
 ## Development & Testing
 
+### Code Quality
+
 ```bash
-cargo test                    # 49 passed; 0 failed
+cargo check --workspace          # Quick compile check
+cargo clippy --all-targets       # Lint check (current: 0 warnings)
+cargo fmt --all                  # Format
+cargo test --workspace           # 49 passed; 0 failed
+```
+
+### Benchmarks
+
+```bash
 cargo bench --bench pool_bench
+```
+
+### Examples
+
+```bash
 cargo run --example basic
-cargo build --release
 ```
 
 ### Test Distribution
@@ -363,6 +379,15 @@ cargo build --release
 | druid-proxy | 2 |
 | druid-ha | 2 |
 | **Total** | **49** |
+
+## Review Report
+
+Latest code review: [REVIEW_REPORT.md](REVIEW_REPORT.md)
+
+- `cargo check`: ✅ Zero warnings
+- `cargo clippy --all-targets`: ✅ Zero warnings
+- `cargo test`: ✅ 49/49 passed
+- `cargo fmt --all`: ✅ Consistent formatting
 
 ## License
 

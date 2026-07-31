@@ -30,11 +30,11 @@ pub struct DruidConfig {
     /// 空闲连接检测间隔(毫秒)，默认 60s
     #[serde(default = "DruidConfig::default_time_between_eviction_runs_ms")]
     pub time_between_eviction_runs_ms: u64,
-    /// 连接最小生存时间(毫秒)
-    #[serde(default)]
+    /// 连接最小生存时间(毫秒)，默认 30min
+    #[serde(default = "DruidConfig::default_min_evictable")]
     pub min_evictable_idle_time_ms: u64,
-    /// 连接最大生存时间(毫秒)
-    #[serde(default)]
+    /// 连接最大生存时间(毫秒)，默认 7h
+    #[serde(default = "DruidConfig::default_max_evictable")]
     pub max_evictable_idle_time_ms: u64,
 
     // 验证参数
@@ -87,13 +87,33 @@ pub struct DruidConfig {
 }
 
 impl DruidConfig {
-    fn default_max_active() -> usize { 8 }
-    fn default_time_between_eviction_runs_ms() -> u64 { 60_000 }
-    fn default_true() -> bool { true }
-    fn default_max_pool_prepared_statement() -> usize { 10 }
-    fn default_keep_alive_between_time_ms() -> u64 { 120_000 }
-    fn default_connect_timeout() -> u64 { 30 }
-    fn default_socket_timeout() -> u64 { 30 }
+    fn default_max_active() -> usize {
+        8
+    }
+    fn default_time_between_eviction_runs_ms() -> u64 {
+        60_000
+    }
+    fn default_true() -> bool {
+        true
+    }
+    fn default_max_pool_prepared_statement() -> usize {
+        10
+    }
+    fn default_keep_alive_between_time_ms() -> u64 {
+        120_000
+    }
+    fn default_connect_timeout() -> u64 {
+        30
+    }
+    fn default_socket_timeout() -> u64 {
+        30
+    }
+    fn default_min_evictable() -> u64 {
+        1_800_000 // 30 minutes
+    }
+    fn default_max_evictable() -> u64 {
+        25_200_000 // 7 hours
+    }
 
     pub fn new(url: &str, username: &str, password: &str) -> Self {
         DruidConfig {
@@ -106,15 +126,16 @@ impl DruidConfig {
             max_active: Self::default_max_active(),
             max_wait_ms: 0,
             time_between_eviction_runs_ms: Self::default_time_between_eviction_runs_ms(),
-            min_evictable_idle_time_ms: 0,
-            max_evictable_idle_time_ms: 0,
+            min_evictable_idle_time_ms: Self::default_min_evictable(),
+            max_evictable_idle_time_ms: Self::default_max_evictable(),
             test_on_borrow: true,
             test_on_return: false,
             test_while_idle: false,
             validation_query: None,
             validation_query_timeout_secs: 0,
             pool_prepared_statements: false,
-            max_pool_prepared_statement_per_connection_size: Self::default_max_pool_prepared_statement(),
+            max_pool_prepared_statement_per_connection_size:
+                Self::default_max_pool_prepared_statement(),
             keep_alive: false,
             keep_alive_between_time_ms: Self::default_keep_alive_between_time_ms(),
             filters: vec![],

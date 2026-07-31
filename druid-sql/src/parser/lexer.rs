@@ -8,7 +8,10 @@ pub struct Lexer {
 
 impl Lexer {
     pub fn new(sql: &str) -> Self {
-        Lexer { chars: sql.chars().collect(), pos: 0 }
+        Lexer {
+            chars: sql.chars().collect(),
+            pos: 0,
+        }
     }
 
     fn peek(&self) -> Option<char> {
@@ -27,7 +30,11 @@ impl Lexer {
 
     fn skip_whitespace(&mut self) {
         while let Some(c) = self.peek() {
-            if c.is_whitespace() { self.advance(); } else { break; }
+            if c.is_whitespace() {
+                self.advance();
+            } else {
+                break;
+            }
         }
     }
 
@@ -91,7 +98,9 @@ impl Lexer {
     fn read_line_comment(&mut self) -> String {
         let mut s = String::new();
         while let Some(c) = self.advance() {
-            if c == '\n' { break; }
+            if c == '\n' {
+                break;
+            }
             s.push(c);
         }
         s
@@ -108,7 +117,9 @@ impl Lexer {
             } else if c == '*' && self.peek() == Some('/') {
                 self.advance();
                 depth -= 1;
-                if depth == 0 { break; }
+                if depth == 0 {
+                    break;
+                }
                 s.push_str("*/");
             } else {
                 s.push(c);
@@ -121,23 +132,27 @@ impl Lexer {
         self.skip_whitespace();
 
         match self.peek() {
-            None => return Token::Eof,
+            None => Token::Eof,
             Some(c) => {
                 // 注释
                 if c == '-' && self.peek_next() == Some('-') {
-                    self.advance(); self.advance();
+                    self.advance();
+                    self.advance();
                     let comment = self.read_line_comment();
                     return Token::Comment(comment);
                 }
                 if c == '/' && self.peek_next() == Some('*') {
-                    self.advance(); self.advance();
+                    self.advance();
+                    self.advance();
                     let comment = self.read_block_comment();
                     return Token::BlockComment(comment);
                 }
 
                 // 字符串
                 if c == '\'' || c == 'N' && self.peek_next() == Some('\'') {
-                    if c == 'N' { self.advance(); }
+                    if c == 'N' {
+                        self.advance();
+                    }
                     return Token::StringLit(self.read_string('\''));
                 }
                 if c == 'X' && self.peek_next() == Some('\'') {
@@ -155,7 +170,7 @@ impl Lexer {
                     return Token::Number(self.read_number());
                 }
                 // 小数 .123
-                if c == '.' && self.peek_next().map_or(false, |n| n.is_ascii_digit()) {
+                if c == '.' && self.peek_next().is_some_and(|n| n.is_ascii_digit()) {
                     return Token::Number(self.read_number());
                 }
 
@@ -174,17 +189,29 @@ impl Lexer {
                     '?' => Token::Placeholder,
                     '=' => Token::Eq,
                     '<' => match self.peek() {
-                        Some('>') => { self.advance(); Token::Neq }
-                        Some('=') => { self.advance(); Token::Leq }
+                        Some('>') => {
+                            self.advance();
+                            Token::Neq
+                        }
+                        Some('=') => {
+                            self.advance();
+                            Token::Leq
+                        }
                         _ => Token::Lt,
                     },
                     '>' => match self.peek() {
-                        Some('=') => { self.advance(); Token::Geq }
+                        Some('=') => {
+                            self.advance();
+                            Token::Geq
+                        }
                         _ => Token::Gt,
                     },
                     '+' => Token::Plus,
                     '-' => match self.peek() {
-                        Some('>') => { self.advance(); Token::Arrow }
+                        Some('>') => {
+                            self.advance();
+                            Token::Arrow
+                        }
                         _ => Token::Minus,
                     },
                     '*' => Token::Mul,
@@ -198,13 +225,23 @@ impl Lexer {
                     '[' => Token::LBracket,
                     ']' => Token::RBracket,
                     ':' => match self.peek() {
-                        Some(':') => { self.advance(); Token::DoubleColon }
-                        Some('=') => { self.advance(); Token::Assign }
+                        Some(':') => {
+                            self.advance();
+                            Token::DoubleColon
+                        }
+                        Some('=') => {
+                            self.advance();
+                            Token::Assign
+                        }
                         _ => Token::Ident(":".to_string()),
                     },
                     '|' => {
-                        if self.peek() == Some('|') { self.advance(); Token::Eq /* 用作 Concat */ }
-                        else { Token::Ident("|".to_string()) }
+                        if self.peek() == Some('|') {
+                            self.advance();
+                            Token::Eq /* 用作 Concat */
+                        } else {
+                            Token::Ident("|".to_string())
+                        }
                     }
                     _ => Token::Ident(c.to_string()),
                 }

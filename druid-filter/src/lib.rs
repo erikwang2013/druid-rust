@@ -47,6 +47,11 @@ impl FilterContext {
         self.connection_id = Some(id);
         self
     }
+
+    pub fn with_statement(mut self, id: u64) -> Self {
+        self.statement_id = Some(id);
+        self
+    }
 }
 
 /// Filter 核心 trait — 连接池生命周期钩子

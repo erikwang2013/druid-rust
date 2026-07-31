@@ -1,18 +1,15 @@
 use std::sync::Arc;
 
-use axum::{
-    Json, Router,
-    extract::State,
-    routing::get,
-};
+use axum::{extract::State, routing::get, Json, Router};
 use druid_stat::StatFilter;
 
-/// 监控 API 响应
-#[derive(serde::Serialize)]
-struct StatResponse {
-    datasource: druid_stat::DataSourceStat,
-    sql_stats: Vec<druid_stat::SqlStat>,
-    slow_sql: Vec<druid_stat::SqlStat>,
+/// HTML 实体转义
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
 }
 
 /// 应用状态
@@ -21,7 +18,10 @@ struct AppState {
 }
 
 /// 启动 Druid 监控控制台 HTTP 服务
-pub async fn start_server(stat_filter: Arc<StatFilter>, addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_server(
+    stat_filter: Arc<StatFilter>,
+    addr: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(AppState { stat_filter });
 
     let app = Router::new()
@@ -61,12 +61,17 @@ async fn index_page(State(state): State<Arc<AppState>>) -> axum::response::Html<
     for s in sql_stats.iter().take(20) {
         rows.push_str(&format!(
             "<tr><td>{}</td><td>{}</td><td>{}ms</td><td>{}ms</td><td>{}</td><td>{}</td></tr>",
-            s.sql, s.execute_count, s.total_time_ms, s.max_time_ms, s.error_count,
+            html_escape(&s.sql),
+            s.execute_count,
+            s.total_time_ms,
+            s.max_time_ms,
+            s.error_count,
             s.last_execute_time.as_deref().unwrap_or("-")
         ));
     }
 
-    let html = format!(r#"<!DOCTYPE html>
+    let html = format!(
+        r#"<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Druid Monitor</title>
 <style>body{{font-family:monospace;margin:20px;background:#f5f5f5}}
 h1{{color:#333}} .stat{{display:flex;gap:15px;flex-wrap:wrap;margin:15px 0}}

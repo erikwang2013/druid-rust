@@ -1,5 +1,5 @@
-use druid_core::DruidError;
 use crate::{Filter, FilterContext};
+use druid_core::DruidError;
 
 /// FilterChain — 有序的 Filter 列表
 ///
@@ -89,20 +89,18 @@ impl FilterChain {
 
     // Statement 生命周期
     pub fn statement_execute_before(&self, sql: &str, stmt_id: u64) -> Result<(), DruidError> {
-        let ctx = self.ctx().with_sql(sql);
+        let ctx = self.ctx().with_sql(sql).with_statement(stmt_id);
         for f in &self.filters {
             f.statement_execute_before(&ctx)?;
         }
-        let _ = stmt_id;
         Ok(())
     }
 
     pub fn statement_execute_after(&self, sql: &str, stmt_id: u64, elapsed_ms: u64, rows: u64) {
-        let ctx = self.ctx().with_sql(sql);
+        let ctx = self.ctx().with_sql(sql).with_statement(stmt_id);
         for f in &self.filters {
             f.statement_execute_after(&ctx, elapsed_ms, rows);
         }
-        let _ = stmt_id;
     }
 
     // ResultSet 生命周期
@@ -143,7 +141,9 @@ mod tests {
     }
 
     impl Filter for CountingFilter {
-        fn name(&self) -> &'static str { "CountingFilter" }
+        fn name(&self) -> &'static str {
+            "CountingFilter"
+        }
 
         fn connection_borrowed(&self, _ctx: &FilterContext, _wait_ms: u64) {
             *self.borrow_count.lock().unwrap() += 1;

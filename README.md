@@ -16,7 +16,9 @@
 - [使用教程](#使用教程)
 - [配置参考](#配置参考)
 - [从 Java Druid 迁移](#从-java-druid-迁移)
+- [部署运维](#部署运维)
 - [开发与测试](#开发与测试)
+- [审查报告](#审查报告)
 
 ## 架构设计
 
@@ -103,7 +105,8 @@ druid-rust/
 ├── Cargo.toml                         # workspace 根，管理 10 个 crate
 ├── docs/
 │   ├── PLAN.md                        # 重构规划文档
-│   └── README_EN.md                   # 英文文档
+│   ├── README_EN.md                   # 英文文档
+│   └── REVIEW_REPORT.md               # 代码审查报告
 │
 ├── druid-core/                        # ── 层 0: 基础设施 ──
 │   └── src/{error.rs, types.rs, config.rs}
@@ -183,8 +186,9 @@ druid-rust/
 ```
 druid-console ──────► druid-stat ──────► druid-filter ──────► druid-core
 druid-ha ───────────► druid-pool ──────► druid-filter         druid-util
-druid-proxy ────────► druid-pool        druid-util
-                      druid-wall ──────► druid-sql
+druid-proxy ────────► druid-pool        druid-stat
+                      druid-wall ──────► druid-util
+                                         druid-sql
                                          druid-filter
 ```
 
@@ -210,7 +214,7 @@ druid-proxy ────────► druid-pool        druid-util
 |------|------|
 | 词法分析 | 80+ Token 类型，关键字/标识符/字面量/操作符/注释 |
 | 递归下降解析 | SELECT/JOIN/WHERE/GROUP/ORDER/LIMIT/INSERT/UPDATE/DELETE/CREATE/DROP |
-| 表达式 | 算术/比较/逻辑/函数调用/CASE WHEN/子查询/IN/BETWEEN/LIKE/EXISTS/聚合 |
+| 表达式 | 算术/比较/逻辑/函数调用/CASE WHEN/子查询/IN/NOT IN/BETWEEN/NOT BETWEEN/LIKE/NOT LIKE/EXISTS/聚合 |
 | 30 种方言 | MySQL/PostgreSQL/Oracle/SQLServer/DB2/H2/ClickHouse/Doris/StarRocks/... |
 | Schema 提取 | `SchemaVisitor` 提取引用的表名和列名 |
 | 格式化 | AST → SQL 字符串双向转换 |
@@ -248,10 +252,10 @@ druid-proxy ────────► druid-pool        druid-util
 
 ```toml
 [dependencies]
-druid-core = "0.1"
-druid-pool = "0.1"
-druid-wall = "0.1"
-druid-stat = "0.1"
+druid-core = "1.0"
+druid-pool = "1.0"
+druid-wall = "1.0"
+druid-stat = "1.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -385,8 +389,8 @@ impl Filter for MyLogFilter {
 | `max_active` | usize | 8 | 最大活跃连接数 |
 | `max_wait_ms` | u64 | 0 | 获取连接最大等待(0=无限) |
 | `time_between_eviction_runs_ms` | u64 | 60000 | 驱逐检查间隔 |
-| `min_evictable_idle_time_ms` | u64 | 0 | 连接最小空闲存活时间 |
-| `max_evictable_idle_time_ms` | u64 | 0 | 连接最大空闲存活时间 |
+| `min_evictable_idle_time_ms` | u64 | 1800000 | 连接最小空闲存活时间(30min) |
+| `max_evictable_idle_time_ms` | u64 | 25200000 | 连接最大空闲存活时间(7h) |
 | `test_on_borrow` | bool | true | 获取时验证 |
 | `test_on_return` | bool | false | 归还时验证 |
 | `test_while_idle` | bool | false | 空闲时验证 |
@@ -442,13 +446,34 @@ impl Filter for MyLogFilter {
 - **没有 JDBC 标准**：自定义 `Driver`/`Connection` async trait 替代 JDBC 接口
 - **MutexGuard 不能跨 `.await`**：后台任务需提前 clone 所需数据
 
-## 开发与测试
+## 部署运维
 
-### 运行测试
+### 配置版本号
+
+版本号通过 Cargo workspace 全局统一管理（`Cargo.toml`）：
+
+```toml
+[workspace.package]
+version = "1.0.6"
+```
+
+所有 10 个子 crate 通过 `version.workspace = true` 继承，修改版本号只需改一处。
+
+### 构建优化
 
 ```bash
-cargo test
-# 49 passed; 0 failed
+cargo build --release    # LTO + codegen-units=1
+```
+
+## 开发与测试
+
+### 代码质量
+
+```bash
+cargo check --workspace          # 快速检查编译
+cargo clippy --all-targets       # Lint 检查（当前: 0 warnings）
+cargo fmt --all                  # 格式化
+cargo test --workspace           # 49 passed; 0 failed
 ```
 
 ### 运行基准
@@ -479,14 +504,14 @@ cargo run --example basic
 | druid-ha | 2 |
 | **总计** | **49** |
 
-### 构建
+## 审查报告
 
-```bash
-cargo build              # debug
-cargo build --release    # release (LTO, codegen-units=1)
-cargo clippy -- -D warnings
-cargo fmt --check
-```
+最新代码审查报告：[REVIEW_REPORT.md](docs/REVIEW_REPORT.md)
+
+- `cargo check`: ✅ 零警告
+- `cargo clippy --all-targets`: ✅ 零警告
+- `cargo test`: ✅ 49/49 通过
+- `cargo fmt --all`: ✅ 格式一致
 
 ## License
 

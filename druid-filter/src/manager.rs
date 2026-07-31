@@ -1,5 +1,5 @@
-use druid_core::DruidError;
 use crate::{Filter, FilterChain};
+use druid_core::DruidError;
 
 /// FilterManager — 从配置创建 FilterChain
 ///
@@ -8,10 +8,7 @@ pub struct FilterManager;
 
 impl FilterManager {
     /// 从 Filter 列表创建 FilterChain
-    pub fn create_chain(
-        data_source_name: &str,
-        filters: Vec<Box<dyn Filter>>,
-    ) -> FilterChain {
+    pub fn create_chain(data_source_name: &str, filters: Vec<Box<dyn Filter>>) -> FilterChain {
         let mut chain = FilterChain::new(data_source_name);
         for filter in filters {
             chain.add_filter(filter);
@@ -52,9 +49,7 @@ mod tests {
 
     #[test]
     fn test_manager_init_destroy() {
-        let mut filters: Vec<Box<dyn Filter>> = vec![
-            Box::new(FilterAdapter::new("f1")),
-        ];
+        let mut filters: Vec<Box<dyn Filter>> = vec![Box::new(FilterAdapter::new("f1"))];
         assert!(FilterManager::init_filters(&mut filters).is_ok());
         FilterManager::destroy_filters(&mut filters);
     }

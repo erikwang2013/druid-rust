@@ -42,7 +42,7 @@ pub enum DbType {
 }
 
 impl DbType {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "mysql" => DbType::MySQL,
             "postgresql" | "postgres" | "pgsql" => DbType::PostgreSQL,

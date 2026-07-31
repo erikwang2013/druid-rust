@@ -19,10 +19,7 @@ pub enum SQLExpr {
         right: Box<SQLExpr>,
     },
     /// 一元运算
-    UnaryOp {
-        op: UnaryOpType,
-        expr: Box<SQLExpr>,
-    },
+    UnaryOp { op: UnaryOpType, expr: Box<SQLExpr> },
     /// 函数调用: name(args)
     Function {
         name: String,
@@ -57,10 +54,7 @@ pub enum SQLExpr {
         not: bool,
     },
     /// IS NULL / IS NOT NULL
-    IsNull {
-        expr: Box<SQLExpr>,
-        not: bool,
-    },
+    IsNull { expr: Box<SQLExpr>, not: bool },
     /// EXISTS (SELECT ...)
     Exists(Box<SQLStatement>, bool),
     /// CASE WHEN
@@ -85,18 +79,25 @@ pub enum SQLExpr {
         order_by: Vec<OrderByExpr>,
     },
     /// 聚合函数: COUNT(*)
-    Aggregate {
-        name: String,
-        expr: Box<SQLExpr>,
-    },
+    Aggregate { name: String, expr: Box<SQLExpr> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOpType {
-    Eq, Neq, Lt, Gt, Leq, Geq,
-    And, Or,
-    Plus, Minus, Mul, Div, Mod,
-    Concat,         // ||
+    Eq,
+    Neq,
+    Lt,
+    Gt,
+    Leq,
+    Geq,
+    And,
+    Or,
+    Plus,
+    Minus,
+    Mul,
+    Div,
+    Mod,
+    Concat, // ||
     Like,
     Regex,
 }
@@ -141,7 +142,7 @@ pub struct OrderByExpr {
 // 这里用枚举占位，实际定义在 statement.rs
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLStatement {
-    Select(SelectStatement),
+    Select(Box<SelectStatement>),
     Insert(InsertStatement),
     Update(UpdateStatement),
     Delete(DeleteStatement),
@@ -174,7 +175,11 @@ pub enum SelectItem {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TableReference {
     /// 简单表名
-    Table { name: String, alias: Option<String>, schema: Option<String> },
+    Table {
+        name: String,
+        alias: Option<String>,
+        schema: Option<String>,
+    },
     /// 子查询
     SubQuery(Box<SQLStatement>, String), // 子查询必须有别名
     /// JOIN 表达式（在 FROM 后直接写连接的场景）
@@ -183,7 +188,11 @@ pub enum TableReference {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum JoinType {
-    Inner, Left, Right, Full, Cross,
+    Inner,
+    Left,
+    Right,
+    Full,
+    Cross,
 }
 
 impl fmt::Display for JoinType {

@@ -9,6 +9,7 @@ authors.workspace = true
 [dependencies]
 druid-core = { path = "../druid-core" }
 druid-filter = { path = "../druid-filter" }
+druid-stat = { path = "../druid-stat" }
 druid-util = { path = "../druid-util" }
 tokio = { workspace = true, features = ["sync", "time", "rt"] }
 parking_lot.workspace = true

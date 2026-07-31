@@ -33,7 +33,10 @@ struct MockConnection {
 
 impl MockConnection {
     fn new(id: u64) -> Self {
-        MockConnection { id, closed: std::sync::Arc::new(Mutex::new(false)) }
+        MockConnection {
+            id,
+            closed: std::sync::Arc::new(Mutex::new(false)),
+        }
     }
 }
 
@@ -41,26 +44,48 @@ impl MockConnection {
 impl Driver for MockDriver {
     type Connection = MockConnection;
 
-    async fn connect(&self, _url: &str, _user: &str, _pass: &str) -> Result<MockConnection, DruidError> {
+    async fn connect(
+        &self,
+        _url: &str,
+        _user: &str,
+        _pass: &str,
+    ) -> Result<MockConnection, DruidError> {
         tokio::time::sleep(self.connect_latency).await;
         let id = self.connect_count.fetch_add(1, Ordering::SeqCst) + 1;
         Ok(MockConnection::new(id))
     }
 
-    fn name(&self) -> &'static str { "MockDriver" }
+    fn name(&self) -> &'static str {
+        "MockDriver"
+    }
 
     async fn validate(&self, _conn: &MockConnection) -> Result<(), DruidError> {
-        if self.validate_ok { Ok(()) } else { Err(DruidError::Pool("validation failed".into())) }
+        if self.validate_ok {
+            Ok(())
+        } else {
+            Err(DruidError::Pool("validation failed".into()))
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl Connection for MockConnection {
-    async fn execute(&self, _sql: &str) -> Result<u64, DruidError> { Ok(1) }
-    async fn query(&self, _sql: &str) -> Result<Vec<Vec<String>>, DruidError> { Ok(vec![]) }
-    async fn close(&self) -> Result<(), DruidError> { *self.closed.lock().unwrap() = true; Ok(()) }
-    async fn ping(&self) -> Result<(), DruidError> { Ok(()) }
-    fn connection_id(&self) -> u64 { self.id }
+    async fn execute(&self, _sql: &str) -> Result<u64, DruidError> {
+        Ok(1)
+    }
+    async fn query(&self, _sql: &str) -> Result<Vec<Vec<String>>, DruidError> {
+        Ok(vec![])
+    }
+    async fn close(&self) -> Result<(), DruidError> {
+        *self.closed.lock().unwrap() = true;
+        Ok(())
+    }
+    async fn ping(&self) -> Result<(), DruidError> {
+        Ok(())
+    }
+    fn connection_id(&self) -> u64 {
+        self.id
+    }
 }
 
 #[tokio::test]

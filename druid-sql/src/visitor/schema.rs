@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
 use crate::ast::*;
+use std::collections::{HashMap, HashSet};
 
 /// Schema 统计访问器 — 提取 SQL 中引用的表名和列名
 #[derive(Debug, Default)]
@@ -12,7 +12,10 @@ pub struct SchemaVisitor {
 
 impl SchemaVisitor {
     pub fn new() -> Self {
-        SchemaVisitor { tables: HashSet::new(), columns: HashMap::new() }
+        SchemaVisitor {
+            tables: HashSet::new(),
+            columns: HashMap::new(),
+        }
     }
 
     /// 访问 SELECT 语句
@@ -103,7 +106,9 @@ impl SchemaVisitor {
 
     fn visit_select_item(&mut self, item: &SelectItem) {
         match item {
-            SelectItem::Expr(expr, _) => { self.visit_expr(expr, ""); }
+            SelectItem::Expr(expr, _) => {
+                self.visit_expr(expr, "");
+            }
             SelectItem::Wildcard(_) => {}
         }
     }
@@ -122,23 +127,39 @@ impl SchemaVisitor {
                 self.visit_expr(right, table);
             }
             SQLExpr::Function { args, .. } => {
-                for arg in args { self.visit_expr(arg, table); }
+                for arg in args {
+                    self.visit_expr(arg, table);
+                }
             }
             SQLExpr::InList { expr, list, .. } => {
                 self.visit_expr(expr, table);
-                for item in list { self.visit_expr(item, table); }
+                for item in list {
+                    self.visit_expr(item, table);
+                }
             }
-            SQLExpr::Nested(inner) => { self.visit_expr(inner, table); }
-            SQLExpr::Case { whens, else_expr, .. } => {
+            SQLExpr::Nested(inner) => {
+                self.visit_expr(inner, table);
+            }
+            SQLExpr::Case {
+                whens, else_expr, ..
+            } => {
                 for (cond, result) in whens {
                     self.visit_expr(cond, table);
                     self.visit_expr(result, table);
                 }
-                if let Some(e) = else_expr { self.visit_expr(e, table); }
+                if let Some(e) = else_expr {
+                    self.visit_expr(e, table);
+                }
             }
-            SQLExpr::Aggregate { expr: inner, .. } => { self.visit_expr(inner, table); }
-            SQLExpr::SubQuery(stmt) => { self.visit_statement(stmt); }
-            SQLExpr::Exists(stmt, _) => { self.visit_statement(stmt); }
+            SQLExpr::Aggregate { expr: inner, .. } => {
+                self.visit_expr(inner, table);
+            }
+            SQLExpr::SubQuery(stmt) => {
+                self.visit_statement(stmt);
+            }
+            SQLExpr::Exists(stmt, _) => {
+                self.visit_statement(stmt);
+            }
             _ => {}
         }
     }

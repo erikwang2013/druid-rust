@@ -3,15 +3,21 @@ use std::collections::HashMap;
 /// 将驼峰命名转为下划线命名
 pub fn camel_to_snake(s: &str) -> String {
     let mut result = String::with_capacity(s.len() + 4);
-    for (i, c) in s.chars().enumerate() {
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
         if c.is_uppercase() {
-            if i > 0 {
+            // 处理连续大写（缩写词）：URLParser → url_parser
+            if i > 0 && (!chars[i - 1].is_uppercase() ||
+                (i + 1 < chars.len() && chars[i + 1].is_lowercase())) {
                 result.push('_');
             }
             result.push(c.to_lowercase().next().unwrap_or(c));
         } else {
             result.push(c);
         }
+        i += 1;
     }
     result
 }
@@ -57,12 +63,18 @@ pub fn parse_properties(prop_str: &str) -> HashMap<String, String> {
     map
 }
 
-/// 截断 SQL 用于日志显示
+/// 截断 SQL 用于日志显示（安全处理多字节字符）
 pub fn truncate_sql(sql: &str, max_len: usize) -> String {
     if sql.len() <= max_len {
         sql.to_string()
     } else {
-        format!("{}...", &sql[..max_len])
+        let end = sql
+            .char_indices()
+            .take(max_len)
+            .last()
+            .map(|(i, c)| i + c.len_utf8())
+            .unwrap_or(max_len.min(sql.len()));
+        format!("{}...", &sql[..end])
     }
 }
 
@@ -74,7 +86,7 @@ mod tests {
     fn test_camel_to_snake() {
         assert_eq!(camel_to_snake("DruidDataSource"), "druid_data_source");
         assert_eq!(camel_to_snake("maxActive"), "max_active");
-        assert_eq!(camel_to_snake("URL"), "u_r_l");
+        assert_eq!(camel_to_snake("URL"), "url");
     }
 
     #[test]
@@ -87,7 +99,10 @@ mod tests {
     fn test_substitute_params() {
         let sql = "SELECT * FROM users WHERE id = ? AND name = ?";
         let result = substitute_params(sql, &["1", "Alice"]);
-        assert_eq!(result, "SELECT * FROM users WHERE id = '1' AND name = 'Alice'");
+        assert_eq!(
+            result,
+            "SELECT * FROM users WHERE id = '1' AND name = 'Alice'"
+        );
     }
 
     #[test]

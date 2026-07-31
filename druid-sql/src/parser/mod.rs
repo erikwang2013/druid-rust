@@ -51,7 +51,7 @@ impl Parser {
     pub fn parse_statement(&mut self) -> ParseResult<SQLStatement> {
         self.skip_comments();
         match &self.current {
-            Token::Select | Token::With => Ok(SQLStatement::Select(self.parse_select()?)),
+            Token::Select | Token::With => Ok(SQLStatement::Select(Box::new(self.parse_select()?))),
             Token::Insert | Token::Replace => Ok(SQLStatement::Insert(self.parse_insert()?)),
             Token::Update => Ok(SQLStatement::Update(self.parse_update()?)),
             Token::Delete => Ok(SQLStatement::Delete(self.parse_delete()?)),
@@ -66,7 +66,9 @@ impl Parser {
         // WITH CTE (暂跳过)
         if self.current == Token::With {
             self.advance();
-            if self.current == Token::Recursive { self.advance(); }
+            if self.current == Token::Recursive {
+                self.advance();
+            }
             // 跳过 CTE 定义直到 )
             while self.current != Token::Select && self.current != Token::Eof {
                 self.advance();
@@ -74,7 +76,10 @@ impl Parser {
         }
         self.advance(); // skip SELECT
 
-        if self.current == Token::Distinct { distinct = true; self.advance(); }
+        if self.current == Token::Distinct {
+            distinct = true;
+            self.advance();
+        }
 
         let columns = self.parse_select_items()?;
         let from = if self.current == Token::From {
@@ -99,7 +104,11 @@ impl Parser {
             let mut cols = Vec::new();
             loop {
                 cols.push(self.parse_expr()?);
-                if self.current == Token::Comma { self.advance(); } else { break; }
+                if self.current == Token::Comma {
+                    self.advance();
+                } else {
+                    break;
+                }
             }
             cols
         } else {
@@ -120,12 +129,22 @@ impl Parser {
             loop {
                 let expr = self.parse_expr()?;
                 let asc = match &self.current {
-                    Token::Asc => { self.advance(); true }
-                    Token::Desc => { self.advance(); false }
+                    Token::Asc => {
+                        self.advance();
+                        true
+                    }
+                    Token::Desc => {
+                        self.advance();
+                        false
+                    }
                     _ => true,
                 };
                 items.push(OrderByExpr { expr, asc });
-                if self.current == Token::Comma { self.advance(); } else { break; }
+                if self.current == Token::Comma {
+                    self.advance();
+                } else {
+                    break;
+                }
             }
             items
         } else {
@@ -147,8 +166,16 @@ impl Parser {
         };
 
         Ok(SelectStatement {
-            distinct, columns, from, joins,
-            where_clause, group_by, having, order_by, limit, offset,
+            distinct,
+            columns,
+            from,
+            joins,
+            where_clause,
+            group_by,
+            having,
+            order_by,
+            limit,
+            offset,
         })
     }
 
@@ -171,7 +198,11 @@ impl Parser {
                 SelectItem::Expr(expr, alias)
             };
             items.push(item);
-            if self.current == Token::Comma { self.advance(); } else { break; }
+            if self.current == Token::Comma {
+                self.advance();
+            } else {
+                break;
+            }
         }
         Ok(items)
     }
@@ -186,7 +217,10 @@ impl Parser {
             } else {
                 "sub".to_string()
             };
-            return Ok(TableReference::SubQuery(Box::new(SQLStatement::Select(sub)), alias));
+            return Ok(TableReference::SubQuery(
+                Box::new(SQLStatement::Select(Box::new(sub))),
+                alias,
+            ));
         }
 
         let mut name = self.parse_ident()?;
@@ -199,7 +233,11 @@ impl Parser {
             } else {
                 None
             };
-            Ok(TableReference::Table { name, alias, schema })
+            Ok(TableReference::Table {
+                name,
+                alias,
+                schema,
+            })
         } else {
             let alias = if matches!(&self.current, Token::Ident(_)) && self.current != Token::As {
                 Some(self.parse_ident()?)
@@ -209,28 +247,82 @@ impl Parser {
             } else {
                 None
             };
-            Ok(TableReference::Table { name, alias, schema: None })
+            Ok(TableReference::Table {
+                name,
+                alias,
+                schema: None,
+            })
         }
     }
 
     fn parse_joins(&mut self) -> ParseResult<Vec<JoinClause>> {
         let mut joins = Vec::new();
-        while let Token::Join | Token::Inner | Token::Left | Token::Right
-            | Token::Full | Token::Cross = &self.current
+        while let Token::Join
+        | Token::Inner
+        | Token::Left
+        | Token::Right
+        | Token::Full
+        | Token::Cross = &self.current
         {
             let join_type = match &self.current {
-                Token::Inner => { self.advance(); if self.current == Token::Join { self.advance(); } JoinType::Inner }
-                Token::Left => { self.advance(); if self.current == Token::Outer { self.advance(); } if self.current == Token::Join { self.advance(); } JoinType::Left }
-                Token::Right => { self.advance(); if self.current == Token::Outer { self.advance(); } if self.current == Token::Join { self.advance(); } JoinType::Right }
-                Token::Full => { self.advance(); if self.current == Token::Outer { self.advance(); } if self.current == Token::Join { self.advance(); } JoinType::Full }
-                Token::Cross => { self.advance(); if self.current == Token::Join { self.advance(); } JoinType::Cross }
-                Token::Join => { self.advance(); JoinType::Inner }
+                Token::Inner => {
+                    self.advance();
+                    if self.current == Token::Join {
+                        self.advance();
+                    }
+                    JoinType::Inner
+                }
+                Token::Left => {
+                    self.advance();
+                    if self.current == Token::Outer {
+                        self.advance();
+                    }
+                    if self.current == Token::Join {
+                        self.advance();
+                    }
+                    JoinType::Left
+                }
+                Token::Right => {
+                    self.advance();
+                    if self.current == Token::Outer {
+                        self.advance();
+                    }
+                    if self.current == Token::Join {
+                        self.advance();
+                    }
+                    JoinType::Right
+                }
+                Token::Full => {
+                    self.advance();
+                    if self.current == Token::Outer {
+                        self.advance();
+                    }
+                    if self.current == Token::Join {
+                        self.advance();
+                    }
+                    JoinType::Full
+                }
+                Token::Cross => {
+                    self.advance();
+                    if self.current == Token::Join {
+                        self.advance();
+                    }
+                    JoinType::Cross
+                }
+                Token::Join => {
+                    self.advance();
+                    JoinType::Inner
+                }
                 _ => unreachable!(),
             };
             let table = self.parse_table_ref()?;
             self.expect(Token::On)?;
             let on = self.parse_expr()?;
-            joins.push(JoinClause { join_type, table, on });
+            joins.push(JoinClause {
+                join_type,
+                table,
+                on,
+            });
         }
         Ok(joins)
     }
@@ -244,7 +336,11 @@ impl Parser {
         while self.current == Token::Or {
             self.advance();
             let right = self.parse_and_expr()?;
-            left = SQLExpr::BinaryOp { left: Box::new(left), op: BinaryOpType::Or, right: Box::new(right) };
+            left = SQLExpr::BinaryOp {
+                left: Box::new(left),
+                op: BinaryOpType::Or,
+                right: Box::new(right),
+            };
         }
         Ok(left)
     }
@@ -254,7 +350,11 @@ impl Parser {
         while self.current == Token::And {
             self.advance();
             let right = self.parse_comparison()?;
-            left = SQLExpr::BinaryOp { left: Box::new(left), op: BinaryOpType::And, right: Box::new(right) };
+            left = SQLExpr::BinaryOp {
+                left: Box::new(left),
+                op: BinaryOpType::And,
+                right: Box::new(right),
+            };
         }
         Ok(left)
     }
@@ -273,20 +373,73 @@ impl Parser {
                 _ => break,
             };
             self.advance();
-            if op == BinaryOpType::Like {
-                // 可能的 NOT LIKE
-            }
             let right = self.parse_additive()?;
-            left = SQLExpr::BinaryOp { left: Box::new(left), op, right: Box::new(right) };
+            left = SQLExpr::BinaryOp {
+                left: Box::new(left),
+                op,
+                right: Box::new(right),
+            };
         }
         // IS NULL / IS NOT NULL
         if self.current == Token::Is {
             self.advance();
             let not = self.current == Token::Not;
-            if not { self.advance(); }
+            if not {
+                self.advance();
+            }
             if self.current == Token::Null {
                 self.advance();
-                left = SQLExpr::IsNull { expr: Box::new(left), not };
+                left = SQLExpr::IsNull {
+                    expr: Box::new(left),
+                    not,
+                };
+            }
+        }
+        // NOT BETWEEN / NOT IN / NOT LIKE
+        if self.current == Token::Not {
+            self.advance();
+            match &self.current {
+                Token::Between => {
+                    self.advance();
+                    let low = self.parse_additive()?;
+                    self.expect(Token::And)?;
+                    let high = self.parse_additive()?;
+                    left = SQLExpr::Between {
+                        expr: Box::new(left),
+                        low: Box::new(low),
+                        high: Box::new(high),
+                        not: true,
+                    };
+                }
+                Token::In => {
+                    self.advance();
+                    self.expect(Token::LParen)?;
+                    let mut items = Vec::new();
+                    loop {
+                        items.push(self.parse_expr()?);
+                        if self.current == Token::Comma {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    self.expect(Token::RParen)?;
+                    left = SQLExpr::InList {
+                        expr: Box::new(left),
+                        list: items,
+                        not: true,
+                    };
+                }
+                Token::Like => {
+                    self.advance();
+                    let pattern = self.parse_additive()?;
+                    left = SQLExpr::Like {
+                        expr: Box::new(left),
+                        pattern: Box::new(pattern),
+                        not: true,
+                    };
+                }
+                _ => {} // unrecognized NOT combination, ignore
             }
         }
         // BETWEEN
@@ -295,7 +448,12 @@ impl Parser {
             let low = self.parse_additive()?;
             self.expect(Token::And)?;
             let high = self.parse_additive()?;
-            left = SQLExpr::Between { expr: Box::new(left), low: Box::new(low), high: Box::new(high), not: false };
+            left = SQLExpr::Between {
+                expr: Box::new(left),
+                low: Box::new(low),
+                high: Box::new(high),
+                not: false,
+            };
         }
         // IN
         if self.current == Token::In {
@@ -304,10 +462,18 @@ impl Parser {
             let mut items = Vec::new();
             loop {
                 items.push(self.parse_expr()?);
-                if self.current == Token::Comma { self.advance(); } else { break; }
+                if self.current == Token::Comma {
+                    self.advance();
+                } else {
+                    break;
+                }
             }
             self.expect(Token::RParen)?;
-            left = SQLExpr::InList { expr: Box::new(left), list: items, not: false };
+            left = SQLExpr::InList {
+                expr: Box::new(left),
+                list: items,
+                not: false,
+            };
         }
         Ok(left)
     }
@@ -322,7 +488,11 @@ impl Parser {
             };
             self.advance();
             let right = self.parse_multiplicative()?;
-            left = SQLExpr::BinaryOp { left: Box::new(left), op, right: Box::new(right) };
+            left = SQLExpr::BinaryOp {
+                left: Box::new(left),
+                op,
+                right: Box::new(right),
+            };
         }
         Ok(left)
     }
@@ -338,7 +508,11 @@ impl Parser {
             };
             self.advance();
             let right = self.parse_primary()?;
-            left = SQLExpr::BinaryOp { left: Box::new(left), op, right: Box::new(right) };
+            left = SQLExpr::BinaryOp {
+                left: Box::new(left),
+                op,
+                right: Box::new(right),
+            };
         }
         Ok(left)
     }
@@ -358,15 +532,26 @@ impl Parser {
                     self.advance();
                     let mut distinct = false;
                     let mut args = Vec::new();
-                    if self.current == Token::Distinct { distinct = true; self.advance(); }
+                    if self.current == Token::Distinct {
+                        distinct = true;
+                        self.advance();
+                    }
                     if self.current != Token::RParen {
                         loop {
                             args.push(self.parse_expr()?);
-                            if self.current == Token::Comma { self.advance(); } else { break; }
+                            if self.current == Token::Comma {
+                                self.advance();
+                            } else {
+                                break;
+                            }
                         }
                     }
                     self.expect(Token::RParen)?;
-                    Ok(SQLExpr::Function { name, args, distinct })
+                    Ok(SQLExpr::Function {
+                        name,
+                        args,
+                        distinct,
+                    })
                 } else {
                     Ok(SQLExpr::Identifier(vec![name]))
                 }
@@ -399,7 +584,9 @@ impl Parser {
                 if self.current == Token::Select {
                     let sub = self.parse_select()?;
                     self.expect(Token::RParen)?;
-                    Ok(SQLExpr::SubQuery(Box::new(SQLStatement::Select(sub))))
+                    Ok(SQLExpr::SubQuery(Box::new(SQLStatement::Select(Box::new(
+                        sub,
+                    )))))
                 } else {
                     let expr = self.parse_expr()?;
                     self.expect(Token::RParen)?;
@@ -409,22 +596,29 @@ impl Parser {
             Token::Not => {
                 self.advance();
                 let expr = self.parse_primary()?;
-                Ok(SQLExpr::UnaryOp { op: UnaryOpType::Not, expr: Box::new(expr) })
+                Ok(SQLExpr::UnaryOp {
+                    op: UnaryOpType::Not,
+                    expr: Box::new(expr),
+                })
             }
             Token::Minus => {
                 self.advance();
                 let expr = self.parse_primary()?;
-                Ok(SQLExpr::UnaryOp { op: UnaryOpType::Neg, expr: Box::new(expr) })
+                Ok(SQLExpr::UnaryOp {
+                    op: UnaryOpType::Neg,
+                    expr: Box::new(expr),
+                })
             }
-            Token::Case => {
-                self.parse_case()
-            }
+            Token::Case => self.parse_case(),
             Token::Exists => {
                 self.advance();
                 self.expect(Token::LParen)?;
                 let sub = self.parse_select()?;
                 self.expect(Token::RParen)?;
-                Ok(SQLExpr::Exists(Box::new(SQLStatement::Select(sub)), false))
+                Ok(SQLExpr::Exists(
+                    Box::new(SQLStatement::Select(Box::new(sub))),
+                    false,
+                ))
             }
             Token::Count => {
                 self.advance();
@@ -436,17 +630,22 @@ impl Parser {
                     self.parse_expr()?
                 };
                 self.expect(Token::RParen)?;
-                Ok(SQLExpr::Aggregate { name: "COUNT".to_string(), expr: Box::new(expr) })
+                Ok(SQLExpr::Aggregate {
+                    name: "COUNT".to_string(),
+                    expr: Box::new(expr),
+                })
             }
-            _ => Err(format!("unexpected token in expression: {:?}", self.current)),
+            _ => Err(format!(
+                "unexpected token in expression: {:?}",
+                self.current
+            )),
         }
     }
 
     fn parse_case(&mut self) -> ParseResult<SQLExpr> {
         self.advance(); // skip CASE
         let expr = if self.current != Token::When {
-            let e = Some(Box::new(self.parse_expr()?));
-            e
+            Some(Box::new(self.parse_expr()?))
         } else {
             None
         };
@@ -465,7 +664,11 @@ impl Parser {
             None
         };
         self.expect(Token::End)?;
-        Ok(SQLExpr::Case { expr, whens, else_expr })
+        Ok(SQLExpr::Case {
+            expr,
+            whens,
+            else_expr,
+        })
     }
 
     fn parse_insert(&mut self) -> ParseResult<InsertStatement> {
@@ -479,7 +682,11 @@ impl Parser {
             let mut cols = Vec::new();
             loop {
                 cols.push(self.parse_ident()?);
-                if self.current == Token::Comma { self.advance(); } else { break; }
+                if self.current == Token::Comma {
+                    self.advance();
+                } else {
+                    break;
+                }
             }
             self.expect(Token::RParen)?;
             cols
@@ -494,13 +701,26 @@ impl Parser {
             let mut row = Vec::new();
             loop {
                 row.push(self.parse_expr()?);
-                if self.current == Token::Comma { self.advance(); } else { break; }
+                if self.current == Token::Comma {
+                    self.advance();
+                } else {
+                    break;
+                }
             }
             self.expect(Token::RParen)?;
             values.push(row);
-            if self.current == Token::Comma { self.advance(); } else { break; }
+            if self.current == Token::Comma {
+                self.advance();
+            } else {
+                break;
+            }
         }
-        Ok(InsertStatement { table, columns, values, is_replace })
+        Ok(InsertStatement {
+            table,
+            columns,
+            values,
+            is_replace,
+        })
     }
 
     fn parse_update(&mut self) -> ParseResult<UpdateStatement> {
@@ -513,7 +733,11 @@ impl Parser {
             self.expect(Token::Eq)?;
             let val = self.parse_expr()?;
             sets.push((col, val));
-            if self.current == Token::Comma { self.advance(); } else { break; }
+            if self.current == Token::Comma {
+                self.advance();
+            } else {
+                break;
+            }
         }
         let where_clause = if self.current == Token::Where {
             self.advance();
@@ -521,7 +745,11 @@ impl Parser {
         } else {
             None
         };
-        Ok(UpdateStatement { table, sets, where_clause })
+        Ok(UpdateStatement {
+            table,
+            sets,
+            where_clause,
+        })
     }
 
     fn parse_delete(&mut self) -> ParseResult<DeleteStatement> {
@@ -534,7 +762,10 @@ impl Parser {
         } else {
             None
         };
-        Ok(DeleteStatement { table, where_clause })
+        Ok(DeleteStatement {
+            table,
+            where_clause,
+        })
     }
 
     fn parse_create_table(&mut self) -> ParseResult<CreateTableStatement> {
@@ -554,10 +785,15 @@ impl Parser {
         loop {
             if self.current == Token::Primary || self.current == Token::Constraint {
                 // 跳过约束定义
-                while self.current != Token::Comma && self.current != Token::RParen && self.current != Token::Eof {
+                while self.current != Token::Comma
+                    && self.current != Token::RParen
+                    && self.current != Token::Eof
+                {
                     self.advance();
                 }
-                if self.current == Token::Comma { self.advance(); }
+                if self.current == Token::Comma {
+                    self.advance();
+                }
                 continue;
             }
             let name = self.parse_ident()?;
@@ -567,13 +803,29 @@ impl Parser {
             let is_primary_key = false;
             if self.current == Token::Primary {
                 self.advance();
-                if self.current == Token::Key { self.advance(); }
+                if self.current == Token::Key {
+                    self.advance();
+                }
             }
-            columns.push(ColumnDef { name, data_type, nullable, default_value: None, is_primary_key });
-            if self.current == Token::Comma { self.advance(); } else { break; }
+            columns.push(ColumnDef {
+                name,
+                data_type,
+                nullable,
+                default_value: None,
+                is_primary_key,
+            });
+            if self.current == Token::Comma {
+                self.advance();
+            } else {
+                break;
+            }
         }
         self.expect(Token::RParen)?;
-        Ok(CreateTableStatement { if_not_exists, table, columns })
+        Ok(CreateTableStatement {
+            if_not_exists,
+            table,
+            columns,
+        })
     }
 
     fn parse_drop_table(&mut self) -> ParseResult<DropTableStatement> {
@@ -609,18 +861,27 @@ impl Parser {
 
 /// 解析 SQL 文本为语句列表
 pub fn parse_sql(sql: &str) -> ParseResult<Vec<SQLStatement>> {
+    const MAX_ITERATIONS: usize = 10_000;
     let mut parser = Parser::new(sql);
     let mut stmts = Vec::new();
-    loop {
+    for _ in 0..MAX_ITERATIONS {
         parser.skip_comments();
         if parser.current == Token::Eof || parser.current == Token::Semicolon {
-            if parser.current == Token::Semicolon { parser.advance(); }
-            if parser.current == Token::Eof { break; }
+            if parser.current == Token::Semicolon {
+                parser.advance();
+            }
+            if parser.current == Token::Eof {
+                break;
+            }
             continue;
         }
         stmts.push(parser.parse_statement()?);
-        if parser.current == Token::Semicolon { parser.advance(); }
-        if parser.current == Token::Eof { break; }
+        if parser.current == Token::Semicolon {
+            parser.advance();
+        }
+        if parser.current == Token::Eof {
+            break;
+        }
     }
     Ok(stmts)
 }

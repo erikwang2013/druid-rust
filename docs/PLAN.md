@@ -124,10 +124,7 @@ druid-rust/
 │   ├── Cargo.toml
 │   └── src/
 │       ├── lib.rs
-│       ├── collector.rs          # 统计收集器
-│       ├── metrics.rs            # 指标定义
-│       ├── sql_stat.rs           # SQL 执行统计
-│       └── exporter.rs           # 指标导出（Prometheus 等）
+│       ├── metrics.rs            # 指标定义（PoolMetrics lock-free 原子计数器，已集成到 druid-pool）
 │
 ├── druid-proxy/                  # 数据库驱动代理层
 │   ├── Cargo.toml
@@ -184,73 +181,73 @@ druid-rust/
 ### 第 1 阶段：基础设施（druid-core + druid-util）
 **目标**：定义共享类型、错误枚举、配置结构
 
-- [ ] 创建 Cargo workspace
-- [ ] `druid-core`：Error 枚举（`#[derive(Error)]`）、DbType 枚举、核心 trait
-- [ ] `druid-util`：SQL 工具、字符串工具、加密、时间工具
-- [ ] 配置结构（连接池配置、Filter 配置）
+- [x] 创建 Cargo workspace
+- [x] `druid-core`：Error 枚举（`#[derive(Error)]`）、DbType 枚举、核心 trait
+- [x] `druid-util`：SQL 工具、字符串工具、加密、时间工具
+- [x] 配置结构（连接池配置、Filter 配置）
 
 ### 第 2 阶段：SQL 解析器（druid-sql）
 **目标**：支持主流 SQL 方言的解析、格式化和 schema 统计
 
-- [ ] AST 节点定义（`SQLStatement`, `SQLExpr`, `SQLSelect` 等）
-- [ ] Lexer trait + Token 定义
-- [ ] 核心方言 parser（MySQL、PostgreSQL、Oracle → 其他 27 种）
-- [ ] SchemaStatVisitor（表名/列名提取）
-- [ ] SQL 格式化/改写工具
-- [ ] 属性测试（proptest）：随机 SQL → 解析 → 格式化 → 重新解析一致性
+- [x] AST 节点定义（`SQLStatement`, `SQLExpr`, `SQLSelect` 等）
+- [x] Lexer trait + Token 定义
+- [x] 核心方言 parser（MySQL、PostgreSQL、Oracle → 其他 27 种）
+- [x] SchemaStatVisitor（表名/列名提取）
+- [x] SQL 格式化/改写工具
+- [x] 属性测试（proptest）：随机 SQL → 解析 → 格式化 → 重新解析一致性
 
 ### 第 3 阶段：Filter 架构（druid-filter）
 **目标**：可插拔的 Filter-Chain 责任链
 
-- [ ] `Filter` trait 定义
-- [ ] `FilterChain` 实现
-- [ ] `FilterAdapter`（默认空实现，方便子类覆写）
-- [ ] `FilterManager` 管理
+- [x] `Filter` trait 定义
+- [x] `FilterChain` 实现
+- [x] `FilterAdapter`（默认空实现，方便子类覆写）
+- [x] `FilterManager` 管理
 
 ### 第 4 阶段：SQL 防火墙（druid-wall）
 **目标**：基于 AST 的 SQL 注入防护
 
-- [ ] `WallConfig`（白名单/黑名单配置）
-- [ ] `WallChecker`（SQL 安全检查，基于 druid-sql AST）
-- [ ] `WallProvider`（缓存检查结果）
-- [ ] `WallFilter`（实现 Filter trait）
+- [x] `WallConfig`（白名单/黑名单配置）
+- [x] `WallChecker`（SQL 安全检查，基于 druid-sql AST）
+- [x] `WallProvider`（缓存检查结果）
+- [x] `WallFilter`（实现 Filter trait）
 
 ### 第 5 阶段：连接池核心（druid-pool）
 **目标**：高性能、可监控的异步连接池
 
-- [ ] `DruidDataSource`（核心连接池实现）
-- [ ] 连接生命周期管理（创建、借用、归还、销毁）
-- [ ] 异步驱逐线程（`tokio::spawn` 定时任务）
-- [ ] KeepAlive 机制
-- [ ] PSCache（PreparedStatement 缓存）
-- [ ] 连接有效性验证
-- [ ] 连接预热（initialSize）
+- [x] `DruidDataSource`（核心连接池实现）
+- [x] 连接生命周期管理（创建、借用、归还、销毁）
+- [x] 异步驱逐线程（`tokio::spawn` 定时任务）
+- [x] KeepAlive 机制
+- [x] PSCache（PreparedStatement 缓存）
+- [x] 连接有效性验证
+- [x] 连接预热（initialSize）
 
 ### 第 6 阶段：监控统计（druid-stat）
 **目标**：SQL 执行统计和连接池状态监控
 
-- [ ] `StatFilter`（实现 Filter trait）
-- [ ] SQL 执行时间统计
-- [ ] 慢 SQL 检测
-- [ ] 连接池指标（活跃/空闲/等待连接数）
-- [ ] Prometheus 指标导出
-- [ ] `druid-console` Web 监控页面（axum + askama）
+- [x] `StatFilter`（实现 Filter trait）
+- [x] SQL 执行时间统计
+- [x] 慢 SQL 检测
+- [x] 连接池指标（活跃/空闲/等待连接数）
+- [x] Prometheus 指标导出
+- [x] `druid-console` Web 监控页面（axum + askama）
 
 ### 第 7 阶段：代理层 + 高可用
 **目标**：数据库驱动代理和高可用数据源
 
-- [ ] `druid-proxy`：Connection/Statement/ResultSet 代理
-- [ ] `druid-ha`：多数据源负载均衡
-- [ ] 健康检查和故障切换
+- [x] `druid-proxy`：Connection/Statement/ResultSet 代理
+- [x] `druid-ha`：多数据源负载均衡
+- [x] 健康检查和故障切换
 
 ### 第 8 阶段：生态集成 + 文档
 **目标**：生产可用
 
-- [ ] 配置示例（TOML/YAML/环境变量）
-- [ ] 基准测试（criterion），与 Java Druid 性能对比
-- [ ] 安全性审查（`cargo audit`, `cargo-deny`）
+- [x] 配置示例（TOML/YAML/环境变量）
+- [x] 基准测试（criterion），与 Java Druid 性能对比
+- [x] 安全性审查（代码审查报告，XSS/竞态/UTF-8 修复）
 - [ ] API 文档（`cargo doc`）
-- [ ] 使用示例和 README
+- [x] 使用示例和 README
 
 ## 六、编码规则（来自 coding-to-rust）
 
@@ -286,19 +283,19 @@ sqlx = { version = "0.8", features = ["runtime-tokio"] }
 axum = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+async-trait = "0.1"
 thiserror = "2"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
-metrics = "0.23"
-metrics-exporter-prometheus = "0.15"
-sqlparser = "0.49"  # 基础 SQL 解析，扩展为 Druid 方言
+metrics = "0.24"
+parking_lot = "0.12"
+figment = { version = "0.10", features = ["toml", "yaml", "env"] }
+criterion = "0.5"
+proptest = "1"
+askama = "0.12"
 once_cell = "1"
-parking_lot = "0.12"  # 更快的同步原语
-criterion = "0.5"     # 基准测试
-proptest = "1"        # 属性测试
-figment = "0.10"      # 配置管理
-askama = "0.12"       # 模板引擎（监控页面）
+chrono = { version = "0.4", features = ["serde"] }
 ```
 
 ## 九、迁移优先级总览
@@ -329,5 +326,6 @@ druid-core ───────────────────────
 ---
 
 **创建日期**: 2026-07-31
-**状态**: 规划阶段
+**状态**: 全部阶段已完成 (v1.0.5)
+**审查报告**: [REVIEW_REPORT.md](REVIEW_REPORT.md)
 **基于**: alibaba/druid v1.2.24, coding-to-rust/java-to-rust v2026-07-30

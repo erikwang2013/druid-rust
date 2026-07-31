@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use druid_core::{DruidConfig, DruidError};
 use druid_filter::FilterChain;
+use druid_stat::metrics::PoolMetrics;
 use tokio::sync::Semaphore;
 
 use crate::driver::{Connection, Driver};
@@ -23,7 +24,13 @@ struct PoolInner<C: Connection> {
 }
 
 impl<C: Connection> PoolInner<C> {
-    fn new() -> Self { PoolInner { idle: VecDeque::new(), active_count: 0, closed: false } }
+    fn new() -> Self {
+        PoolInner {
+            idle: VecDeque::new(),
+            active_count: 0,
+            closed: false,
+        }
+    }
 }
 
 pub struct DruidDataSource<D: Driver> {
@@ -32,6 +39,8 @@ pub struct DruidDataSource<D: Driver> {
     semaphore: Arc<Semaphore>,
     inner: Arc<Mutex<PoolInner<D::Connection>>>,
     filter_chain: Arc<FilterChain>,
+    metrics: PoolMetrics,
+    pscache: Mutex<PSCache>,
     next_id: AtomicU64,
     inited: AtomicBool,
     evict_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -43,11 +52,19 @@ impl<D: Driver> DruidDataSource<D> {
         let max = config.max_active.max(1);
         let driver = Arc::new(driver);
         let fc = Arc::new(FilterChain::new(&config.url));
+        let ps_cache_size = if config.pool_prepared_statements {
+            config.max_pool_prepared_statement_per_connection_size
+        } else {
+            0
+        };
         DruidDataSource {
-            driver, config,
+            driver,
+            config,
             semaphore: Arc::new(Semaphore::new(max)),
             inner: Arc::new(Mutex::new(PoolInner::new())),
             filter_chain: fc,
+            metrics: PoolMetrics::new(),
+            pscache: Mutex::new(PSCache::new(ps_cache_size)),
             next_id: AtomicU64::new(1),
             inited: AtomicBool::new(false),
             evict_handle: Mutex::new(None),
@@ -66,8 +83,10 @@ impl<D: Driver> DruidDataSource<D> {
                 self.inner.lock().unwrap().idle.push_back(e);
             }
         }
+        self.metrics.set_idle(self.idle_count());
+        self.metrics.set_active(self.active_count());
 
-        // 驱逐线程
+        // eviction and keepalive threads remain unchanged...
         if self.config.time_between_eviction_runs_ms > 0 {
             let inner = self.inner.clone();
             let fchain = self.filter_chain.clone();
@@ -80,16 +99,20 @@ impl<D: Driver> DruidDataSource<D> {
                     let now = Instant::now();
                     let mut g = inner.lock().unwrap();
                     while g.idle.len() > min_idle {
-                        let should = g.idle.front().map_or(false, |e| {
+                        let should = g.idle.front().is_some_and(|e| {
                             now.duration_since(e.last_used_at).as_millis() > max_ms as u128
                         });
                         if should {
                             if let Some(e) = g.idle.pop_front() {
                                 fchain.connection_closed(e.id);
                                 let c = e.conn.clone();
-                                tokio::spawn(async move { let _ = c.close().await; });
+                                tokio::spawn(async move {
+                                    let _ = c.close().await;
+                                });
                             }
-                        } else { break; }
+                        } else {
+                            break;
+                        }
                     }
                 }
             });
@@ -116,7 +139,11 @@ impl<D: Driver> DruidDataSource<D> {
             *self.keepalive_handle.lock().unwrap() = Some(handle);
         }
 
-        tracing::info!("DruidDataSource init: max={}, init={}", self.config.max_active, self.config.initial_size);
+        tracing::info!(
+            "DruidDataSource init: max={}, init={}",
+            self.config.max_active,
+            self.config.initial_size
+        );
         Ok(())
     }
 
@@ -130,31 +157,41 @@ impl<D: Driver> DruidDataSource<D> {
                 Err(_) => return Err(DruidError::Pool("connection wait timeout".into())),
             }
         } else {
-            self.semaphore.clone().acquire_owned().await
+            self.semaphore
+                .clone()
+                .acquire_owned()
+                .await
                 .map_err(|_| DruidError::Pool("semaphore closed".into()))?
         };
 
         let wait_ms = start.elapsed().as_millis() as u64;
 
         let (conn_id, conn): (u64, Arc<D::Connection>) = {
-            let mut g = self.inner.lock().unwrap();
-            if let Some(e) = g.idle.pop_front() {
-                let id = e.id;
-                let c = e.conn;
+            let entry = {
+                let mut g = self.inner.lock().unwrap();
                 g.active_count += 1;
-                (id, c)
+                g.idle.pop_front()
+            };
+            if let Some(e) = entry {
+                (e.id, e.conn)
             } else {
                 let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-                g.active_count += 1;
-                drop(g);
-                let c = self.driver.connect(
-                    &self.config.url, &self.config.username, &self.config.password,
-                ).await.map(Arc::new)?;
+                let c = self
+                    .driver
+                    .connect(
+                        &self.config.url,
+                        &self.config.username,
+                        &self.config.password,
+                    )
+                    .await
+                    .map(Arc::new)?;
                 self.filter_chain.connection_created(id);
                 (id, c)
             }
         };
 
+        self.metrics.inc_borrow();
+        self.metrics.add_wait_time_ns(start.elapsed().as_nanos() as u64);
         self.filter_chain.connection_borrowed(conn_id, wait_ms);
 
         if self.config.test_on_borrow {
@@ -162,7 +199,8 @@ impl<D: Driver> DruidDataSource<D> {
         }
 
         Ok(PoolGuard {
-            conn, conn_id,
+            conn,
+            conn_id,
             permit: Some(permit),
             inner: self.inner.clone(),
             filter_chain: self.filter_chain.clone(),
@@ -171,26 +209,59 @@ impl<D: Driver> DruidDataSource<D> {
 
     async fn create_entry(&self) -> Result<PoolEntry<D::Connection>, DruidError> {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-        let conn = self.driver.connect(
-            &self.config.url, &self.config.username, &self.config.password,
-        ).await.map(Arc::new)?;
+        let conn = self
+            .driver
+            .connect(
+                &self.config.url,
+                &self.config.username,
+                &self.config.password,
+            )
+            .await
+            .map(Arc::new)?;
+        self.metrics.inc_create();
         self.filter_chain.connection_created(id);
-        Ok(PoolEntry { conn, last_used_at: Instant::now(), id })
+        Ok(PoolEntry {
+            conn,
+            last_used_at: Instant::now(),
+            id,
+        })
     }
 
     // ── 状态查询 ──
 
-    pub fn active_count(&self) -> usize { self.inner.lock().unwrap().active_count }
-    pub fn idle_count(&self) -> usize { self.inner.lock().unwrap().idle.len() }
-    pub fn max_active(&self) -> usize { self.config.max_active }
-    pub fn filter_chain(&self) -> &FilterChain { &self.filter_chain }
+    pub fn active_count(&self) -> usize {
+        self.inner.lock().unwrap().active_count
+    }
+    pub fn idle_count(&self) -> usize {
+        self.inner.lock().unwrap().idle.len()
+    }
+    pub fn max_active(&self) -> usize {
+        self.config.max_active
+    }
+    pub fn filter_chain(&self) -> &FilterChain {
+        &self.filter_chain
+    }
+    pub fn metrics(&self) -> &PoolMetrics {
+        &self.metrics
+    }
+    pub fn pscache(&self) -> &Mutex<PSCache> {
+        &self.pscache
+    }
 
     pub async fn close(&self) -> Result<(), DruidError> {
-        if let Some(h) = self.evict_handle.lock().unwrap().take() { h.abort(); }
-        if let Some(h) = self.keepalive_handle.lock().unwrap().take() { h.abort(); }
-        let mut g = self.inner.lock().unwrap();
-        g.closed = true;
-        while let Some(e) = g.idle.pop_front() {
+        if let Some(h) = self.evict_handle.lock().unwrap().take() {
+            h.abort();
+        }
+        if let Some(h) = self.keepalive_handle.lock().unwrap().take() {
+            h.abort();
+        }
+        let conns: Vec<PoolEntry<D::Connection>> = {
+            let mut g = self.inner.lock().unwrap();
+            g.closed = true;
+            g.idle.drain(..).collect()
+        };
+        for e in conns {
+            self.metrics.inc_destroy();
             self.filter_chain.connection_closed(e.id);
             let _ = e.conn.close().await;
         }
@@ -210,8 +281,12 @@ pub struct PoolGuard<C: Connection> {
 }
 
 impl<C: Connection> PoolGuard<C> {
-    pub fn connection(&self) -> &Arc<C> { &self.conn }
-    pub fn connection_id(&self) -> u64 { self.conn_id }
+    pub fn connection(&self) -> &Arc<C> {
+        &self.conn
+    }
+    pub fn connection_id(&self) -> u64 {
+        self.conn_id
+    }
 }
 
 impl<C: Connection> Drop for PoolGuard<C> {
@@ -228,7 +303,13 @@ impl<C: Connection> Drop for PoolGuard<C> {
         } else {
             self.filter_chain.connection_closed(self.conn_id);
             let c = self.conn.clone();
-            tokio::spawn(async move { let _ = c.close().await; });
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                tokio::task::spawn_blocking(move || {
+                    handle.block_on(async move {
+                        let _ = c.close().await;
+                    });
+                });
+            }
         }
         // permit auto-released
     }

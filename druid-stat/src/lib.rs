@@ -2,7 +2,6 @@ pub mod metrics;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::time::Instant;
 
 use druid_core::DruidError;
 use druid_filter::{Filter, FilterContext};
@@ -64,6 +63,7 @@ pub struct DataSourceStat {
 ///
 /// 实现 Filter trait，实时采集 SQL 执行统计和连接池指标。
 pub struct StatFilter {
+    #[allow(dead_code)]
     name: String,
     sql_stats: Mutex<HashMap<String, SqlStat>>,
     ds_stat: Mutex<DataSourceStat>,
@@ -86,7 +86,7 @@ impl StatFilter {
     /// 获取所有 SQL 统计（按总耗时降序排列）
     pub fn get_sql_stats(&self) -> Vec<SqlStat> {
         let mut stats: Vec<SqlStat> = self.sql_stats.lock().unwrap().values().cloned().collect();
-        stats.sort_by(|a, b| b.total_time_ms.cmp(&a.total_time_ms));
+        stats.sort_by_key(|b| std::cmp::Reverse(b.total_time_ms));
         stats
     }
 
@@ -110,7 +110,9 @@ impl StatFilter {
 }
 
 impl Filter for StatFilter {
-    fn name(&self) -> &'static str { "stat" }
+    fn name(&self) -> &'static str {
+        "stat"
+    }
 
     fn init(&mut self) -> Result<(), DruidError> {
         tracing::info!("StatFilter initialized (slow_sql_ms={})", self.slow_sql_ms);
@@ -144,12 +146,15 @@ impl Filter for StatFilter {
     fn statement_execute_after(&self, ctx: &FilterContext, elapsed_ms: u64, rows: u64) {
         let sql = ctx.sql.as_deref().unwrap_or("UNKNOWN");
         let mut stats = self.sql_stats.lock().unwrap();
-        let entry = stats.entry(sql.to_string()).or_insert_with(|| SqlStat::new(sql));
+        let entry = stats
+            .entry(sql.to_string())
+            .or_insert_with(|| SqlStat::new(sql));
         entry.execute_count += 1;
         entry.total_time_ms += elapsed_ms;
         entry.max_time_ms = entry.max_time_ms.max(elapsed_ms);
         entry.rows_read += rows;
-        entry.last_execute_time = Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
+        entry.last_execute_time =
+            Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
 
         // 慢 SQL 日志
         if elapsed_ms >= self.slow_sql_ms {

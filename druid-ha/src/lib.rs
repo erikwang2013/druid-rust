@@ -8,15 +8,15 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use druid_core::DruidError;
-use druid_pool::DruidDataSource;
 use druid_pool::driver::Driver;
+use druid_pool::DruidDataSource;
 
 /// 数据源节点状态
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeStatus {
-    Active,   // 正常
-    Down,     // 故障
-    Testing,  // 探测中
+    Active,  // 正常
+    Down,    // 故障
+    Testing, // 探测中
 }
 
 /// 数据源节点
@@ -36,6 +36,12 @@ pub struct HighAvailableDataSource<D: Driver> {
     check_interval: Duration,
     /// 健康检查 SQL
     validation_sql: String,
+}
+
+impl<D: Driver> Default for HighAvailableDataSource<D> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<D: Driver> HighAvailableDataSource<D> {
@@ -71,7 +77,9 @@ impl<D: Driver> HighAvailableDataSource<D> {
 
     /// 获取一个活跃数据源（加权轮询）
     pub async fn get_datasource(&self) -> Result<Arc<DruidDataSource<D>>, DruidError> {
-        let active: Vec<&Arc<HaNode<D>>> = self.nodes.iter()
+        let active: Vec<&Arc<HaNode<D>>> = self
+            .nodes
+            .iter()
             .filter(|n| *n.status.lock().unwrap() == NodeStatus::Active)
             .collect();
 
@@ -117,11 +125,16 @@ impl<D: Driver> HighAvailableDataSource<D> {
     }
 
     /// 节点总数
-    pub fn node_count(&self) -> usize { self.nodes.len() }
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
 
     /// 活跃节点数
     pub fn active_count(&self) -> usize {
-        self.nodes.iter().filter(|n| *n.status.lock().unwrap() == NodeStatus::Active).count()
+        self.nodes
+            .iter()
+            .filter(|n| *n.status.lock().unwrap() == NodeStatus::Active)
+            .count()
     }
 
     /// 获取所有节点名称
@@ -142,7 +155,9 @@ impl<D: Driver> HighAvailableDataSource<D> {
                     }
                 }
                 NodeStatus::Down => {
-                    { *node.status.lock().unwrap() = NodeStatus::Testing; }
+                    {
+                        *node.status.lock().unwrap() = NodeStatus::Testing;
+                    }
                     if let Ok(guard) = node.datasource.get_connection().await {
                         drop(guard);
                         self.mark_up(&node.name);
@@ -159,14 +174,11 @@ impl<D: Driver> HighAvailableDataSource<D> {
     pub fn spawn_health_check_loop(self: &Arc<Self>) {
         let this = self.clone();
         let interval = this.check_interval;
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async move {
-                loop {
-                    tokio::time::sleep(interval).await;
-                    this.run_health_check().await;
-                }
-            });
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(interval).await;
+                this.run_health_check().await;
+            }
         });
     }
 }
@@ -174,26 +186,54 @@ impl<D: Driver> HighAvailableDataSource<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicU64;
-    use std::time::Duration;
     use druid_pool::driver::{Connection, Driver};
+    use std::sync::atomic::AtomicU64;
 
     #[derive(Debug, Clone)]
-    struct MockHaConn { id: u64, closed: Arc<Mutex<bool>> }
-    impl MockHaConn { fn new(id: u64) -> Self { MockHaConn { id, closed: Arc::new(Mutex::new(false)) } } }
+    struct MockHaConn {
+        id: u64,
+        closed: Arc<Mutex<bool>>,
+    }
+    impl MockHaConn {
+        fn new(id: u64) -> Self {
+            MockHaConn {
+                id,
+                closed: Arc::new(Mutex::new(false)),
+            }
+        }
+    }
 
     #[async_trait::async_trait]
     impl Connection for MockHaConn {
-        async fn execute(&self, _: &str) -> Result<u64, DruidError> { Ok(1) }
-        async fn query(&self, _: &str) -> Result<Vec<Vec<String>>, DruidError> { Ok(vec![]) }
-        async fn close(&self) -> Result<(), DruidError> { *self.closed.lock().unwrap() = true; Ok(()) }
-        async fn ping(&self) -> Result<(), DruidError> { Ok(()) }
-        fn connection_id(&self) -> u64 { self.id }
+        async fn execute(&self, _: &str) -> Result<u64, DruidError> {
+            Ok(1)
+        }
+        async fn query(&self, _: &str) -> Result<Vec<Vec<String>>, DruidError> {
+            Ok(vec![])
+        }
+        async fn close(&self) -> Result<(), DruidError> {
+            *self.closed.lock().unwrap() = true;
+            Ok(())
+        }
+        async fn ping(&self) -> Result<(), DruidError> {
+            Ok(())
+        }
+        fn connection_id(&self) -> u64 {
+            self.id
+        }
     }
 
     #[derive(Debug)]
-    struct MockHaDriver { connect_count: AtomicU64 }
-    impl MockHaDriver { fn new() -> Self { MockHaDriver { connect_count: AtomicU64::new(0) } } }
+    struct MockHaDriver {
+        connect_count: AtomicU64,
+    }
+    impl MockHaDriver {
+        fn new() -> Self {
+            MockHaDriver {
+                connect_count: AtomicU64::new(0),
+            }
+        }
+    }
 
     #[async_trait::async_trait]
     impl Driver for MockHaDriver {
@@ -202,18 +242,26 @@ mod tests {
             let id = self.connect_count.fetch_add(1, Ordering::SeqCst) + 1;
             Ok(MockHaConn::new(id))
         }
-        fn name(&self) -> &'static str { "MockHaDriver" }
-        async fn validate(&self, _: &MockHaConn) -> Result<(), DruidError> { Ok(()) }
+        fn name(&self) -> &'static str {
+            "MockHaDriver"
+        }
+        async fn validate(&self, _: &MockHaConn) -> Result<(), DruidError> {
+            Ok(())
+        }
     }
 
     #[tokio::test]
     async fn test_ha_round_robin() {
         let mut ha = HighAvailableDataSource::new();
         let mut cfg1 = druid_core::DruidConfig::new("mock://n1", "u", "p");
-        cfg1.initial_size = 0; cfg1.max_active = 2; cfg1.test_on_borrow = false;
+        cfg1.initial_size = 0;
+        cfg1.max_active = 2;
+        cfg1.test_on_borrow = false;
         let ds1 = DruidDataSource::new(MockHaDriver::new(), cfg1);
         let mut cfg2 = druid_core::DruidConfig::new("mock://n2", "u", "p");
-        cfg2.initial_size = 0; cfg2.max_active = 2; cfg2.test_on_borrow = false;
+        cfg2.initial_size = 0;
+        cfg2.max_active = 2;
+        cfg2.test_on_borrow = false;
         let ds2 = DruidDataSource::new(MockHaDriver::new(), cfg2);
         let _ = ds1.init().await;
         let _ = ds2.init().await;

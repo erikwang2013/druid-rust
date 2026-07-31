@@ -36,7 +36,11 @@ pub fn format_duration_ms(ms: u64) -> String {
 /// 计算已经过的时间（毫秒）
 pub fn elapsed_millis(since_millis: i64) -> u64 {
     let elapsed = current_time_millis() - since_millis;
-    if elapsed < 0 { 0 } else { elapsed as u64 }
+    if elapsed < 0 {
+        0
+    } else {
+        elapsed as u64
+    }
 }
 
 /// 两个时间戳之间的 Duration

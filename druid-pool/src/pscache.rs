@@ -7,13 +7,17 @@ pub struct PSCache {
 }
 
 struct PSEntry {
+    #[allow(dead_code)]
     sql: String,
     hit_count: u64,
 }
 
 impl PSCache {
     pub fn new(max_size: usize) -> Self {
-        PSCache { cache: HashMap::new(), max_size }
+        PSCache {
+            cache: HashMap::new(),
+            max_size,
+        }
     }
 
     /// 缓存查询命中
@@ -28,17 +32,35 @@ impl PSCache {
 
     /// 缓存新 SQL
     pub fn put(&mut self, sql: &str) {
+        if self.cache.contains_key(sql) {
+            return;
+        }
         if self.cache.len() >= self.max_size {
             // 简单淘汰：删除 hit_count 最小的条目
-            if let Some(key) = self.cache.iter().min_by_key(|(_, v)| v.hit_count).map(|(k, _)| k.clone()) {
+            if let Some(key) = self
+                .cache
+                .iter()
+                .min_by_key(|(_, v)| v.hit_count)
+                .map(|(k, _)| k.clone())
+            {
                 self.cache.remove(&key);
             }
         }
-        self.cache.entry(sql.to_string()).or_insert(PSEntry { sql: sql.to_string(), hit_count: 0 });
+        self.cache.insert(sql.to_string(), PSEntry {
+            sql: sql.to_string(),
+            hit_count: 0,
+        });
     }
 
-    pub fn len(&self) -> usize { self.cache.len() }
-    pub fn clear(&mut self) { self.cache.clear(); }
+    pub fn len(&self) -> usize {
+        self.cache.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.cache.is_empty()
+    }
+    pub fn clear(&mut self) {
+        self.cache.clear();
+    }
 }
 
 #[cfg(test)]

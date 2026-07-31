@@ -9,7 +9,12 @@ pub trait Driver: Send + Sync + 'static {
     type Connection: Connection;
 
     /// 创建新连接
-    async fn connect(&self, url: &str, username: &str, password: &str) -> Result<Self::Connection, DruidError>;
+    async fn connect(
+        &self,
+        url: &str,
+        username: &str,
+        password: &str,
+    ) -> Result<Self::Connection, DruidError>;
 
     /// 驱动名称
     fn name(&self) -> &'static str;
