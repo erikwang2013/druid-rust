@@ -1,0 +1,105 @@
+use std::collections::HashMap;
+
+/// 将驼峰命名转为下划线命名
+pub fn camel_to_snake(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() + 4);
+    for (i, c) in s.chars().enumerate() {
+        if c.is_uppercase() {
+            if i > 0 {
+                result.push('_');
+            }
+            result.push(c.to_lowercase().next().unwrap_or(c));
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+/// 将下划线命名转为驼峰命名
+pub fn snake_to_camel(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut capitalize = false;
+    for c in s.chars() {
+        if c == '_' {
+            capitalize = true;
+        } else if capitalize {
+            result.push(c.to_uppercase().next().unwrap_or(c));
+            capitalize = false;
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+/// 简单 SQL 参数替换（? 占位符）
+pub fn substitute_params(sql: &str, params: &[&str]) -> String {
+    let mut result = sql.to_string();
+    for param in params {
+        if let Some(pos) = result.find('?') {
+            let quoted = format!("'{}'", param.replace('\'', "''"));
+            result.replace_range(pos..pos + 1, &quoted);
+        }
+    }
+    result
+}
+
+/// 解析连接属性字符串 "key1=value1;key2=value2"
+pub fn parse_properties(prop_str: &str) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    for pair in prop_str.split(';') {
+        let pair = pair.trim();
+        if let Some((k, v)) = pair.split_once('=') {
+            map.insert(k.trim().to_string(), v.trim().to_string());
+        }
+    }
+    map
+}
+
+/// 截断 SQL 用于日志显示
+pub fn truncate_sql(sql: &str, max_len: usize) -> String {
+    if sql.len() <= max_len {
+        sql.to_string()
+    } else {
+        format!("{}...", &sql[..max_len])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_camel_to_snake() {
+        assert_eq!(camel_to_snake("DruidDataSource"), "druid_data_source");
+        assert_eq!(camel_to_snake("maxActive"), "max_active");
+        assert_eq!(camel_to_snake("URL"), "u_r_l");
+    }
+
+    #[test]
+    fn test_snake_to_camel() {
+        assert_eq!(snake_to_camel("druid_data_source"), "druidDataSource");
+        assert_eq!(snake_to_camel("max_active"), "maxActive");
+    }
+
+    #[test]
+    fn test_substitute_params() {
+        let sql = "SELECT * FROM users WHERE id = ? AND name = ?";
+        let result = substitute_params(sql, &["1", "Alice"]);
+        assert_eq!(result, "SELECT * FROM users WHERE id = '1' AND name = 'Alice'");
+    }
+
+    #[test]
+    fn test_parse_properties() {
+        let props = parse_properties("key1=val1;key2=val2");
+        assert_eq!(props.get("key1").unwrap(), "val1");
+        assert_eq!(props.get("key2").unwrap(), "val2");
+    }
+
+    #[test]
+    fn test_truncate() {
+        assert_eq!(truncate_sql("hello world", 5), "hello...");
+        assert_eq!(truncate_sql("hi", 10), "hi");
+    }
+}

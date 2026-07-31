@@ -1,0 +1,156 @@
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+
+/// DruidDataSource 连接池配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DruidConfig {
+    /// 数据库连接 URL
+    pub url: String,
+    /// 用户名
+    pub username: String,
+    /// 密码
+    #[serde(skip_serializing)]
+    pub password: String,
+    /// 数据库驱动类名
+    pub driver_class_name: Option<String>,
+
+    // 连接池参数
+    /// 初始化连接数，默认 0
+    #[serde(default)]
+    pub initial_size: usize,
+    /// 最小空闲连接数，默认 0
+    #[serde(default)]
+    pub min_idle: usize,
+    /// 最大活跃连接数，默认 8
+    #[serde(default = "DruidConfig::default_max_active")]
+    pub max_active: usize,
+    /// 获取连接最大等待时间(毫秒)，默认不限制
+    #[serde(default)]
+    pub max_wait_ms: u64,
+    /// 空闲连接检测间隔(毫秒)，默认 60s
+    #[serde(default = "DruidConfig::default_time_between_eviction_runs_ms")]
+    pub time_between_eviction_runs_ms: u64,
+    /// 连接最小生存时间(毫秒)
+    #[serde(default)]
+    pub min_evictable_idle_time_ms: u64,
+    /// 连接最大生存时间(毫秒)
+    #[serde(default)]
+    pub max_evictable_idle_time_ms: u64,
+
+    // 验证参数
+    /// 获取连接时是否验证
+    #[serde(default = "DruidConfig::default_true")]
+    pub test_on_borrow: bool,
+    /// 归还连接时是否验证
+    #[serde(default)]
+    pub test_on_return: bool,
+    /// 空闲检测时是否验证
+    #[serde(default)]
+    pub test_while_idle: bool,
+    /// 验证查询 SQL
+    pub validation_query: Option<String>,
+    /// 验证查询超时(秒)
+    #[serde(default)]
+    pub validation_query_timeout_secs: u64,
+
+    // PSCache
+    /// 是否开启 PreparedStatement 缓存
+    #[serde(default)]
+    pub pool_prepared_statements: bool,
+    /// PSCache 最大缓存数
+    #[serde(default = "DruidConfig::default_max_pool_prepared_statement")]
+    pub max_pool_prepared_statement_per_connection_size: usize,
+
+    // KeepAlive
+    /// 是否开启 KeepAlive
+    #[serde(default)]
+    pub keep_alive: bool,
+    /// KeepAlive 间隔(毫秒)
+    #[serde(default = "DruidConfig::default_keep_alive_between_time_ms")]
+    pub keep_alive_between_time_ms: u64,
+
+    // Filter 配置
+    /// Filter 类名列表
+    #[serde(default)]
+    pub filters: Vec<String>,
+    /// 连接属性
+    #[serde(default)]
+    pub connection_properties: Vec<String>,
+
+    // 超时
+    /// 连接超时(秒)
+    #[serde(default = "DruidConfig::default_connect_timeout")]
+    pub connect_timeout_secs: u64,
+    /// Socket 超时(秒)
+    #[serde(default = "DruidConfig::default_socket_timeout")]
+    pub socket_timeout_secs: u64,
+}
+
+impl DruidConfig {
+    fn default_max_active() -> usize { 8 }
+    fn default_time_between_eviction_runs_ms() -> u64 { 60_000 }
+    fn default_true() -> bool { true }
+    fn default_max_pool_prepared_statement() -> usize { 10 }
+    fn default_keep_alive_between_time_ms() -> u64 { 120_000 }
+    fn default_connect_timeout() -> u64 { 30 }
+    fn default_socket_timeout() -> u64 { 30 }
+
+    pub fn new(url: &str, username: &str, password: &str) -> Self {
+        DruidConfig {
+            url: url.to_string(),
+            username: username.to_string(),
+            password: password.to_string(),
+            driver_class_name: None,
+            initial_size: 0,
+            min_idle: 0,
+            max_active: Self::default_max_active(),
+            max_wait_ms: 0,
+            time_between_eviction_runs_ms: Self::default_time_between_eviction_runs_ms(),
+            min_evictable_idle_time_ms: 0,
+            max_evictable_idle_time_ms: 0,
+            test_on_borrow: true,
+            test_on_return: false,
+            test_while_idle: false,
+            validation_query: None,
+            validation_query_timeout_secs: 0,
+            pool_prepared_statements: false,
+            max_pool_prepared_statement_per_connection_size: Self::default_max_pool_prepared_statement(),
+            keep_alive: false,
+            keep_alive_between_time_ms: Self::default_keep_alive_between_time_ms(),
+            filters: vec![],
+            connection_properties: vec![],
+            connect_timeout_secs: Self::default_connect_timeout(),
+            socket_timeout_secs: Self::default_socket_timeout(),
+        }
+    }
+
+    /// 获取连接最大等待时间
+    pub fn max_wait(&self) -> Option<Duration> {
+        if self.max_wait_ms > 0 {
+            Some(Duration::from_millis(self.max_wait_ms))
+        } else {
+            None
+        }
+    }
+
+    /// 空闲连接驱逐间隔
+    pub fn eviction_interval(&self) -> Duration {
+        Duration::from_millis(self.time_between_eviction_runs_ms)
+    }
+
+    /// KeepAlive 间隔
+    pub fn keep_alive_interval(&self) -> Duration {
+        Duration::from_millis(self.keep_alive_between_time_ms)
+    }
+
+    /// 连接超时
+    pub fn connect_timeout(&self) -> Duration {
+        Duration::from_secs(self.connect_timeout_secs)
+    }
+}
+
+impl Default for DruidConfig {
+    fn default() -> Self {
+        DruidConfig::new("", "", "")
+    }
+}
