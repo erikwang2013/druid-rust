@@ -15,7 +15,7 @@ pub fn camel_to_snake(s: &str) -> String {
             {
                 result.push('_');
             }
-            result.push(c.to_lowercase().next().unwrap_or(c));
+            result.push_str(&c.to_lowercase().to_string());
         } else {
             result.push(c);
         }
@@ -43,25 +43,21 @@ pub fn snake_to_camel(s: &str) -> String {
 
 /// 简单 SQL 参数替换（? 占位符）
 ///
-/// 使用占位符标记避免二次替换：参数值中的 ? 不会干扰替换。
+/// 单次遍历完成替换，参数值中的 ? 不会干扰后续替换。
 pub fn substitute_params(sql: &str, params: &[&str]) -> String {
-    const MARKER: &str = "\x00PARAM\x00";
+    let escaped: Vec<String> = params
+        .iter()
+        .map(|p| format!("'{}'", p.replace('\'', "''")))
+        .collect();
     let mut result = String::with_capacity(sql.len() + params.len() * 8);
     let mut param_idx = 0;
     for ch in sql.chars() {
-        if ch == '?' && param_idx < params.len() {
-            result.push_str(MARKER);
-            result.push_str(&param_idx.to_string());
-            result.push_str(MARKER);
+        if ch == '?' && param_idx < escaped.len() {
+            result.push_str(&escaped[param_idx]);
             param_idx += 1;
         } else {
             result.push(ch);
         }
-    }
-    for (i, param) in params.iter().enumerate().take(param_idx) {
-        let quoted = format!("'{}'", param.replace('\'', "''"));
-        let placeholder = format!("{}{}{}", MARKER, i, MARKER);
-        result = result.replace(&placeholder, &quoted);
     }
     result
 }

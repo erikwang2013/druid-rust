@@ -160,6 +160,38 @@ impl SchemaVisitor {
             SQLExpr::Exists(stmt, _) => {
                 self.visit_statement(stmt);
             }
+            SQLExpr::Like { expr, pattern, .. } => {
+                self.visit_expr(expr, table);
+                self.visit_expr(pattern, table);
+            }
+            SQLExpr::Between { expr, low, high, .. } => {
+                self.visit_expr(expr, table);
+                self.visit_expr(low, table);
+                self.visit_expr(high, table);
+            }
+            SQLExpr::IsNull { expr, .. } => {
+                self.visit_expr(expr, table);
+            }
+            SQLExpr::InSubQuery { expr, query, .. } => {
+                self.visit_expr(expr, table);
+                self.visit_statement(query);
+            }
+            SQLExpr::Cast { expr, .. } => {
+                self.visit_expr(expr, table);
+            }
+            SQLExpr::WindowFunction {
+                function,
+                partition_by,
+                order_by,
+            } => {
+                self.visit_expr(function, table);
+                for p in partition_by {
+                    self.visit_expr(p, table);
+                }
+                for o in order_by {
+                    self.visit_expr(&o.expr, table);
+                }
+            }
             _ => {}
         }
     }
