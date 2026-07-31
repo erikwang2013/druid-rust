@@ -17,7 +17,7 @@ members = [
 
 [workspace.package]
 name="druid-rust"
-version = "1.0.4"
+version = "1.0.5"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/alibaba/druid"
