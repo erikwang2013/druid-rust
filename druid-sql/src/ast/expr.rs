@@ -146,7 +146,7 @@ pub enum SQLStatement {
     Update(UpdateStatement),
     Delete(DeleteStatement),
     CreateTable(CreateTableStatement),
-    DropTable(DropTableStatement),
+    DropObject(DropStatement),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -251,7 +251,16 @@ pub struct ColumnDef {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DropTableStatement {
+pub enum DropObjectType {
+    Table,
+    View,
+    Index,
+    Database,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropStatement {
+    pub object_type: DropObjectType,
     pub if_exists: bool,
-    pub table: String,
+    pub name: String,
 }

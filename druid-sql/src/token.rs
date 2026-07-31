@@ -118,7 +118,6 @@ pub enum Token {
     Number(String),
     StringLit(String),
     HexString(String),
-    NationalString(String),
     Placeholder,
     Eq,
     Neq,
@@ -143,7 +142,6 @@ pub enum Token {
     Assign,
     Concat,
     Eof,
-    Whitespace,
     Comment(String),
     BlockComment(String),
 }

@@ -56,7 +56,7 @@ impl Parser {
             Token::Update => Ok(SQLStatement::Update(self.parse_update()?)),
             Token::Delete => Ok(SQLStatement::Delete(self.parse_delete()?)),
             Token::Create => Ok(SQLStatement::CreateTable(self.parse_create_table()?)),
-            Token::Drop => Ok(SQLStatement::DropTable(self.parse_drop_table()?)),
+            Token::Drop => Ok(SQLStatement::DropObject(self.parse_drop()?)),
             _ => Err(format!("unexpected token: {:?}", self.current)),
         }
     }
@@ -74,8 +74,11 @@ impl Parser {
                     self.advance();
                     loop {
                         self.parse_ident()?;
-                        if self.current == Token::Comma { self.advance(); }
-                        else { break; }
+                        if self.current == Token::Comma {
+                            self.advance();
+                        } else {
+                            break;
+                        }
                     }
                     self.expect(Token::RParen)?;
                 }
@@ -460,10 +463,7 @@ impl Parser {
                     self.expect(Token::LParen)?;
                     let sub = self.parse_select()?;
                     self.expect(Token::RParen)?;
-                    left = SQLExpr::Exists(
-                        Box::new(SQLStatement::Select(Box::new(sub))),
-                        true,
-                    );
+                    left = SQLExpr::Exists(Box::new(SQLStatement::Select(Box::new(sub))), true);
                 }
                 _ => {
                     tracing::warn!("unrecognized NOT combination: {:?}", self.current);
@@ -890,12 +890,28 @@ impl Parser {
                 dt.push_str(s);
                 self.advance();
             }
-            Token::Int | Token::BigInt | Token::SmallInt | Token::TinyInt
-            | Token::VarChar | Token::Char | Token::Text | Token::Boolean
-            | Token::Float | Token::Double | Token::Decimal
-            | Token::Real | Token::Date | Token::Time | Token::Timestamp
-            | Token::Blob | Token::Clob | Token::Json | Token::Jsonb
-            | Token::Xml | Token::Uuid | Token::Bytea => {
+            Token::Int
+            | Token::BigInt
+            | Token::SmallInt
+            | Token::TinyInt
+            | Token::VarChar
+            | Token::Char
+            | Token::Text
+            | Token::Boolean
+            | Token::Float
+            | Token::Double
+            | Token::Decimal
+            | Token::Real
+            | Token::Date
+            | Token::Time
+            | Token::Timestamp
+            | Token::Blob
+            | Token::Clob
+            | Token::Json
+            | Token::Jsonb
+            | Token::Xml
+            | Token::Uuid
+            | Token::Bytea => {
                 dt.push_str(self.current.as_type_name());
                 self.advance();
             }
@@ -923,9 +939,23 @@ impl Parser {
         Ok(dt)
     }
 
-    fn parse_drop_table(&mut self) -> ParseResult<DropTableStatement> {
+    fn parse_drop(&mut self) -> ParseResult<DropStatement> {
         self.advance(); // skip DROP
-        self.expect(Token::Table)?;
+        let obj_type = match &self.current {
+            Token::Table => {
+                self.advance();
+                DropObjectType::Table
+            }
+            Token::View => {
+                self.advance();
+                DropObjectType::View
+            }
+            Token::Index => {
+                self.advance();
+                DropObjectType::Index
+            }
+            _ => DropObjectType::Table,
+        };
         let if_exists = if self.current == Token::If {
             self.advance();
             self.expect(Token::Exists)?;
@@ -933,8 +963,12 @@ impl Parser {
         } else {
             false
         };
-        let table = self.parse_ident()?;
-        Ok(DropTableStatement { if_exists, table })
+        let name = self.parse_ident()?;
+        Ok(DropStatement {
+            object_type: obj_type,
+            if_exists,
+            name,
+        })
     }
 
     fn parse_ident(&mut self) -> ParseResult<String> {
@@ -954,6 +988,18 @@ impl Parser {
     }
 }
 
+impl SQLParser for Parser {
+    fn parse_statement(&mut self) -> ParseResult<SQLStatement> {
+        Parser::parse_statement(self)
+    }
+    fn parse_select(&mut self) -> ParseResult<SelectStatement> {
+        Parser::parse_select(self)
+    }
+    fn parse_expr(&mut self) -> ParseResult<SQLExpr> {
+        Parser::parse_expr(self)
+    }
+}
+
 /// 解析 SQL 文本为语句列表（最多 10,000 条语句）
 pub fn parse_sql(sql: &str) -> ParseResult<Vec<SQLStatement>> {
     const MAX_ITERATIONS: usize = 10_000;
@@ -969,7 +1015,10 @@ pub fn parse_sql(sql: &str) -> ParseResult<Vec<SQLStatement>> {
                 break;
             }
             if i == MAX_ITERATIONS - 1 {
-                tracing::warn!("parse_sql reached MAX_ITERATIONS ({}), remaining input truncated", MAX_ITERATIONS);
+                tracing::warn!(
+                    "parse_sql reached MAX_ITERATIONS ({}), remaining input truncated",
+                    MAX_ITERATIONS
+                );
             }
             continue;
         }
@@ -981,7 +1030,10 @@ pub fn parse_sql(sql: &str) -> ParseResult<Vec<SQLStatement>> {
             break;
         }
         if i == MAX_ITERATIONS - 1 {
-            tracing::warn!("parse_sql reached MAX_ITERATIONS ({}), remaining input truncated", MAX_ITERATIONS);
+            tracing::warn!(
+                "parse_sql reached MAX_ITERATIONS ({}), remaining input truncated",
+                MAX_ITERATIONS
+            );
         }
     }
     Ok(stmts)

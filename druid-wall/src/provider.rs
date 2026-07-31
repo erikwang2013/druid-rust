@@ -40,10 +40,7 @@ impl WallProvider {
             }
         } else {
             let preview: String = sql.chars().take(200).collect();
-            tracing::warn!(
-                "Wall AST check skipped: SQL parse failed for '{}'",
-                preview
-            );
+            tracing::warn!("Wall AST check skipped: SQL parse failed for '{}'", preview);
         }
         if let Some(deny) = ast_deny {
             self.cache_insert(sql, deny.clone());
@@ -62,7 +59,7 @@ impl WallProvider {
 
     fn cache_insert(&mut self, sql: &str, result: WallCheckResult) {
         if self.cache.len() >= self.max_cache_size {
-            let evict_count = self.max_cache_size / 2;
+            let evict_count = (self.max_cache_size / 2).max(1);
             for _ in 0..evict_count {
                 if let Some(old) = self.order.pop_front() {
                     self.cache.remove(&old);

@@ -9,7 +9,7 @@ pub fn format_statement(stmt: &SQLStatement) -> String {
         SQLStatement::Update(s) => format_update(s),
         SQLStatement::Delete(s) => format_delete(s),
         SQLStatement::CreateTable(s) => format_create_table(s),
-        SQLStatement::DropTable(s) => format_drop_table(s),
+        SQLStatement::DropObject(s) => format_drop(s),
     }
 }
 
@@ -148,12 +148,18 @@ fn format_create_table(stmt: &CreateTableStatement) -> String {
     s
 }
 
-fn format_drop_table(stmt: &DropTableStatement) -> String {
-    let mut s = "DROP TABLE ".to_string();
+fn format_drop(stmt: &DropStatement) -> String {
+    let obj = match stmt.object_type {
+        DropObjectType::Table => "TABLE",
+        DropObjectType::View => "VIEW",
+        DropObjectType::Index => "INDEX",
+        DropObjectType::Database => "DATABASE",
+    };
+    let mut s = format!("DROP {} ", obj);
     if stmt.if_exists {
         s.push_str("IF EXISTS ");
     }
-    s.push_str(&stmt.table);
+    s.push_str(&stmt.name);
     s
 }
 

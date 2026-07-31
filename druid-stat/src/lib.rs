@@ -85,7 +85,13 @@ impl StatFilter {
 
     /// 获取所有 SQL 统计（按总耗时降序排列）
     pub fn get_sql_stats(&self) -> Vec<SqlStat> {
-        let mut stats: Vec<SqlStat> = self.sql_stats.lock().expect("stat lock poisoned").values().cloned().collect();
+        let mut stats: Vec<SqlStat> = self
+            .sql_stats
+            .lock()
+            .expect("stat lock poisoned")
+            .values()
+            .cloned()
+            .collect();
         stats.sort_by_key(|b| std::cmp::Reverse(b.total_time_ms));
         stats
     }
@@ -105,7 +111,10 @@ impl StatFilter {
 
     /// 获取总执行次数
     pub fn execute_count(&self) -> u64 {
-        self.ds_stat.lock().expect("stat lock poisoned").execute_count
+        self.ds_stat
+            .lock()
+            .expect("stat lock poisoned")
+            .execute_count
     }
 }
 
@@ -159,7 +168,9 @@ impl Filter for StatFilter {
         let entry = if let Some(e) = stats.get_mut(sql) {
             e
         } else {
-            stats.entry(sql.to_string()).or_insert_with(|| SqlStat::new(sql))
+            stats
+                .entry(sql.to_string())
+                .or_insert_with(|| SqlStat::new(sql))
         };
         entry.execute_count += 1;
         entry.total_time_ms += elapsed_ms;

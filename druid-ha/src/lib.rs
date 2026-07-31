@@ -145,7 +145,12 @@ impl<D: Driver> HighAvailableDataSource<D> {
     /// 执行一轮健康检查
     pub async fn run_health_check(self: &Arc<Self>) {
         for node in &self.nodes {
-            let status = { node.status.lock().unwrap_or_else(|e| e.into_inner()).clone() };
+            let status = {
+                node.status
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone()
+            };
             match status {
                 NodeStatus::Active => {
                     if let Ok(guard) = node.datasource.get_connection().await {
@@ -156,7 +161,8 @@ impl<D: Driver> HighAvailableDataSource<D> {
                 }
                 NodeStatus::Down => {
                     {
-                        *node.status.lock().unwrap_or_else(|e| e.into_inner()) = NodeStatus::Testing;
+                        *node.status.lock().unwrap_or_else(|e| e.into_inner()) =
+                            NodeStatus::Testing;
                     }
                     if let Ok(guard) = node.datasource.get_connection().await {
                         drop(guard);
@@ -238,7 +244,13 @@ mod tests {
     #[async_trait::async_trait]
     impl Driver for MockHaDriver {
         type Connection = MockHaConn;
-        async fn connect(&self, _: &str, _: &str, _: &str, _: Option<std::time::Duration>) -> Result<MockHaConn, DruidError> {
+        async fn connect(
+            &self,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: Option<std::time::Duration>,
+        ) -> Result<MockHaConn, DruidError> {
             let id = self.connect_count.fetch_add(1, Ordering::SeqCst) + 1;
             Ok(MockHaConn::new(id))
         }

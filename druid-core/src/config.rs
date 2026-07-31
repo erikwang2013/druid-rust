@@ -191,18 +191,36 @@ impl std::fmt::Debug for DruidConfig {
             .field("min_idle", &self.min_idle)
             .field("max_active", &self.max_active)
             .field("max_wait_ms", &self.max_wait_ms)
-            .field("time_between_eviction_runs_ms", &self.time_between_eviction_runs_ms)
-            .field("min_evictable_idle_time_ms", &self.min_evictable_idle_time_ms)
-            .field("max_evictable_idle_time_ms", &self.max_evictable_idle_time_ms)
+            .field(
+                "time_between_eviction_runs_ms",
+                &self.time_between_eviction_runs_ms,
+            )
+            .field(
+                "min_evictable_idle_time_ms",
+                &self.min_evictable_idle_time_ms,
+            )
+            .field(
+                "max_evictable_idle_time_ms",
+                &self.max_evictable_idle_time_ms,
+            )
             .field("test_on_borrow", &self.test_on_borrow)
             .field("test_on_return", &self.test_on_return)
             .field("test_while_idle", &self.test_while_idle)
             .field("validation_query", &self.validation_query)
-            .field("validation_query_timeout_secs", &self.validation_query_timeout_secs)
+            .field(
+                "validation_query_timeout_secs",
+                &self.validation_query_timeout_secs,
+            )
             .field("pool_prepared_statements", &self.pool_prepared_statements)
-            .field("max_pool_prepared_statement_per_connection_size", &self.max_pool_prepared_statement_per_connection_size)
+            .field(
+                "max_pool_prepared_statement_per_connection_size",
+                &self.max_pool_prepared_statement_per_connection_size,
+            )
             .field("keep_alive", &self.keep_alive)
-            .field("keep_alive_between_time_ms", &self.keep_alive_between_time_ms)
+            .field(
+                "keep_alive_between_time_ms",
+                &self.keep_alive_between_time_ms,
+            )
             .field("filters", &self.filters)
             .field("connection_properties", &self.connection_properties)
             .field("connect_timeout_secs", &self.connect_timeout_secs)

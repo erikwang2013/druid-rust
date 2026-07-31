@@ -81,8 +81,8 @@ impl SchemaVisitor {
                     self.add_column(&s.table, &col.name);
                 }
             }
-            SQLStatement::DropTable(s) => {
-                self.tables.insert(s.table.clone());
+            SQLStatement::DropObject(s) => {
+                self.tables.insert(s.name.clone());
             }
         }
     }
@@ -164,7 +164,9 @@ impl SchemaVisitor {
                 self.visit_expr(expr, table);
                 self.visit_expr(pattern, table);
             }
-            SQLExpr::Between { expr, low, high, .. } => {
+            SQLExpr::Between {
+                expr, low, high, ..
+            } => {
                 self.visit_expr(expr, table);
                 self.visit_expr(low, table);
                 self.visit_expr(high, table);

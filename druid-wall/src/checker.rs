@@ -61,7 +61,7 @@ impl WallChecker {
             SQLStatement::Update(s) => self.check_update(s),
             SQLStatement::Delete(s) => self.check_delete(s),
             SQLStatement::CreateTable(_) => self.check_op(&DenyOperation::CreateTable),
-            SQLStatement::DropTable(_) => self.check_op(&DenyOperation::DropTable),
+            SQLStatement::DropObject(_) => self.check_op(&DenyOperation::DropTable),
         }
     }
 
@@ -72,56 +72,105 @@ impl WallChecker {
                 SQLExpr::Function { name, .. } | SQLExpr::Aggregate { name, .. } => {
                     let upper = name.to_uppercase();
                     if deny.iter().any(|f| f.to_uppercase() == upper) {
-                        return Some(WallCheckResult::deny(format!("forbidden function: {}", name)));
+                        return Some(WallCheckResult::deny(format!(
+                            "forbidden function: {}",
+                            name
+                        )));
                     }
                 }
                 SQLExpr::BinaryOp { left, right, .. } => {
-                    if let Some(r) = visit(left, deny) { return Some(r); }
-                    if let Some(r) = visit(right, deny) { return Some(r); }
+                    if let Some(r) = visit(left, deny) {
+                        return Some(r);
+                    }
+                    if let Some(r) = visit(right, deny) {
+                        return Some(r);
+                    }
                 }
                 SQLExpr::UnaryOp { expr, .. }
                 | SQLExpr::Nested(expr)
                 | SQLExpr::IsNull { expr, .. }
                 | SQLExpr::Cast { expr, .. } => {
-                    if let Some(r) = visit(expr, deny) { return Some(r); }
+                    if let Some(r) = visit(expr, deny) {
+                        return Some(r);
+                    }
                 }
                 SQLExpr::InList { expr, list, .. } => {
-                    if let Some(r) = visit(expr, deny) { return Some(r); }
+                    if let Some(r) = visit(expr, deny) {
+                        return Some(r);
+                    }
                     for item in list {
-                        if let Some(r) = visit(item, deny) { return Some(r); }
+                        if let Some(r) = visit(item, deny) {
+                            return Some(r);
+                        }
                     }
                 }
-                SQLExpr::Between { expr, low, high, .. } => {
-                    if let Some(r) = visit(expr, deny) { return Some(r); }
-                    if let Some(r) = visit(low, deny) { return Some(r); }
-                    if let Some(r) = visit(high, deny) { return Some(r); }
+                SQLExpr::Between {
+                    expr, low, high, ..
+                } => {
+                    if let Some(r) = visit(expr, deny) {
+                        return Some(r);
+                    }
+                    if let Some(r) = visit(low, deny) {
+                        return Some(r);
+                    }
+                    if let Some(r) = visit(high, deny) {
+                        return Some(r);
+                    }
                 }
                 SQLExpr::Like { expr, pattern, .. } => {
-                    if let Some(r) = visit(expr, deny) { return Some(r); }
-                    if let Some(r) = visit(pattern, deny) { return Some(r); }
+                    if let Some(r) = visit(expr, deny) {
+                        return Some(r);
+                    }
+                    if let Some(r) = visit(pattern, deny) {
+                        return Some(r);
+                    }
                 }
-                SQLExpr::Case { expr: case_expr, whens, else_expr } => {
+                SQLExpr::Case {
+                    expr: case_expr,
+                    whens,
+                    else_expr,
+                } => {
                     if let Some(e) = case_expr {
-                        if let Some(r) = visit(e, deny) { return Some(r); }
+                        if let Some(r) = visit(e, deny) {
+                            return Some(r);
+                        }
                     }
                     for (cond, result) in whens {
-                        if let Some(r) = visit(cond, deny) { return Some(r); }
-                        if let Some(r) = visit(result, deny) { return Some(r); }
+                        if let Some(r) = visit(cond, deny) {
+                            return Some(r);
+                        }
+                        if let Some(r) = visit(result, deny) {
+                            return Some(r);
+                        }
                     }
                     if let Some(e) = else_expr {
-                        if let Some(r) = visit(e, deny) { return Some(r); }
+                        if let Some(r) = visit(e, deny) {
+                            return Some(r);
+                        }
                     }
                 }
-                SQLExpr::SubQuery(s) | SQLExpr::Exists(s, _) | SQLExpr::InSubQuery { query: s, .. } => {
+                SQLExpr::SubQuery(s)
+                | SQLExpr::Exists(s, _)
+                | SQLExpr::InSubQuery { query: s, .. } => {
                     return visit_stmt(s, deny);
                 }
-                SQLExpr::WindowFunction { function, partition_by, order_by } => {
-                    if let Some(r) = visit(function, deny) { return Some(r); }
+                SQLExpr::WindowFunction {
+                    function,
+                    partition_by,
+                    order_by,
+                } => {
+                    if let Some(r) = visit(function, deny) {
+                        return Some(r);
+                    }
                     for p in partition_by {
-                        if let Some(r) = visit(p, deny) { return Some(r); }
+                        if let Some(r) = visit(p, deny) {
+                            return Some(r);
+                        }
                     }
                     for o in order_by {
-                        if let Some(r) = visit(&o.expr, deny) { return Some(r); }
+                        if let Some(r) = visit(&o.expr, deny) {
+                            return Some(r);
+                        }
                     }
                 }
                 _ => {}
@@ -133,34 +182,48 @@ impl WallChecker {
                 SQLStatement::Select(s) => {
                     for item in &s.columns {
                         if let druid_sql::ast::SelectItem::Expr(e, _) = item {
-                            if let Some(r) = visit(e, deny) { return Some(r); }
+                            if let Some(r) = visit(e, deny) {
+                                return Some(r);
+                            }
                         }
                     }
                     if let Some(ref w) = s.where_clause {
-                        if let Some(r) = visit(w, deny) { return Some(r); }
+                        if let Some(r) = visit(w, deny) {
+                            return Some(r);
+                        }
                     }
                     for join in &s.joins {
-                        if let Some(r) = visit(&join.on, deny) { return Some(r); }
+                        if let Some(r) = visit(&join.on, deny) {
+                            return Some(r);
+                        }
                     }
                 }
                 SQLStatement::Insert(s) => {
                     for row in &s.values {
                         for val in row {
-                            if let Some(r) = visit(val, deny) { return Some(r); }
+                            if let Some(r) = visit(val, deny) {
+                                return Some(r);
+                            }
                         }
                     }
                 }
                 SQLStatement::Update(s) => {
                     for (_, val) in &s.sets {
-                        if let Some(r) = visit(val, deny) { return Some(r); }
+                        if let Some(r) = visit(val, deny) {
+                            return Some(r);
+                        }
                     }
                     if let Some(ref w) = s.where_clause {
-                        if let Some(r) = visit(w, deny) { return Some(r); }
+                        if let Some(r) = visit(w, deny) {
+                            return Some(r);
+                        }
                     }
                 }
                 SQLStatement::Delete(s) => {
                     if let Some(ref w) = s.where_clause {
-                        if let Some(r) = visit(w, deny) { return Some(r); }
+                        if let Some(r) = visit(w, deny) {
+                            return Some(r);
+                        }
                     }
                 }
                 _ => {}

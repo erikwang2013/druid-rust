@@ -169,7 +169,9 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), 102400).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 102400)
+            .await
+            .unwrap();
         let html = String::from_utf8_lossy(&body);
         assert!(html.contains("Druid Monitor"));
         assert!(html.contains("<!DOCTYPE html>"));

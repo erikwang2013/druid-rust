@@ -15,6 +15,8 @@ pub struct PoolMetrics {
     create_count: AtomicU64,
     /// 连接关闭总数
     destroy_count: AtomicU64,
+    /// 从空闲池命中次数
+    cache_hit_count: AtomicU64,
     /// 总等待时间(ns)
     total_wait_ns: AtomicU64,
 }
@@ -38,6 +40,9 @@ impl PoolMetrics {
     }
     pub fn inc_borrow(&self) {
         self.borrow_count.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn inc_cache_hit(&self) {
+        self.cache_hit_count.fetch_add(1, Ordering::Relaxed);
     }
     pub fn inc_create(&self) {
         self.create_count.fetch_add(1, Ordering::Relaxed);
@@ -65,6 +70,10 @@ impl PoolMetrics {
     pub fn create_count(&self) -> u64 {
         self.create_count.load(Ordering::Relaxed)
     }
+    pub fn cache_hit_count(&self) -> u64 {
+        self.cache_hit_count.load(Ordering::Relaxed)
+    }
+
     pub fn destroy_count(&self) -> u64 {
         self.destroy_count.load(Ordering::Relaxed)
     }

@@ -80,7 +80,11 @@ impl<D: Driver> DruidDataSource<D> {
 
         for _ in 0..self.config.initial_size {
             if let Ok(e) = self.create_entry().await {
-                self.inner.lock().unwrap_or_else(|e| e.into_inner()).idle.push_back(e);
+                self.inner
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .idle
+                    .push_back(e);
             }
         }
         self.metrics.set_idle(self.idle_count());
@@ -105,11 +109,18 @@ impl<D: Driver> DruidDataSource<D> {
                     let mut to_evict: Vec<PoolEntry<D::Connection>> = Vec::new();
                     g.idle.retain(|e| {
                         let idle_ms = now.duration_since(e.last_used_at).as_millis() as u64;
-                        let over_max_idle = (current_idle - evicted) > min_idle && idle_ms > max_idle_ms;
-                        let over_lifetime = max_lifetime_ms > 0 && idle_ms > max_lifetime_ms;
+                        let over_max_idle =
+                            (current_idle - evicted) > min_idle && idle_ms > max_idle_ms;
+                        let over_lifetime = max_lifetime_ms > 0
+                            && idle_ms > max_lifetime_ms
+                            && (current_idle - evicted) > min_idle;
                         if over_max_idle || over_lifetime {
                             evicted += 1;
-                            to_evict.push(PoolEntry { conn: e.conn.clone(), last_used_at: e.last_used_at, id: e.id });
+                            to_evict.push(PoolEntry {
+                                conn: e.conn.clone(),
+                                last_used_at: e.last_used_at,
+                                id: e.id,
+                            });
                             false
                         } else {
                             true
@@ -122,7 +133,9 @@ impl<D: Driver> DruidDataSource<D> {
                     drop(g);
                     for e in to_evict {
                         let c = e.conn;
-                        tokio::spawn(async move { let _ = c.close().await; });
+                        tokio::spawn(async move {
+                            let _ = c.close().await;
+                        });
                     }
                 }
             });
@@ -143,18 +156,26 @@ impl<D: Driver> DruidDataSource<D> {
                     };
                     for conn in &conns {
                         if let Err(e) = driver.validate(conn).await {
-                            tracing::warn!("KeepAlive validation failed: {}, evicting connection", e);
+                            tracing::warn!(
+                                "KeepAlive validation failed: {}, evicting connection",
+                                e
+                            );
                             let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
                             g.idle.retain(|entry| !Arc::ptr_eq(&entry.conn, conn));
                             if let Ok(handle) = tokio::runtime::Handle::try_current() {
                                 let c = conn.clone();
-                                handle.spawn(async move { let _ = c.close().await; });
+                                handle.spawn(async move {
+                                    let _ = c.close().await;
+                                });
                             }
                         }
                     }
                 }
             });
-            *self.keepalive_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
+            *self
+                .keepalive_handle
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(handle);
         }
 
         tracing::info!(
@@ -165,11 +186,15 @@ impl<D: Driver> DruidDataSource<D> {
         Ok(())
     }
 
-    pub async fn get_connection(&self) -> Result<PoolGuard<D::Connection>, DruidError> {
+    pub async fn get_connection(&self) -> Result<PoolGuard<D>, DruidError> {
         if self.inner.lock().unwrap_or_else(|e| e.into_inner()).closed {
             return Err(DruidError::Pool("datasource is closed".into()));
         }
+        if !self.inited.load(Ordering::SeqCst) {
+            return Err(DruidError::Pool("datasource not initialized".into()));
+        }
         let start = Instant::now();
+        self.metrics.inc_waiting();
 
         let permit = if let Some(max_wait) = self.config.max_wait() {
             match tokio::time::timeout(max_wait, self.semaphore.clone().acquire_owned()).await {
@@ -188,7 +213,7 @@ impl<D: Driver> DruidDataSource<D> {
         let wait_ms = start.elapsed().as_millis() as u64;
 
         let (conn_id, conn, from_idle): (u64, Arc<D::Connection>, bool) = {
-            let entry = {
+            let idle_entry = {
                 let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
                 g.active_count += 1;
                 let e = g.idle.pop_front();
@@ -196,32 +221,52 @@ impl<D: Driver> DruidDataSource<D> {
                 self.metrics.set_idle(g.idle.len());
                 e
             };
-            if let Some(e) = entry {
-                (e.id, e.conn, true)
-            } else {
-                let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-                let timeout = self.config.connect_timeout();
-                let c = match self
-                    .driver
-                    .connect(
-                        &self.config.url,
-                        &self.config.username,
-                        &self.config.password,
-                        Some(timeout),
-                    )
-                    .await
-                {
-                    Ok(conn) => conn,
-                    Err(e) => {
-                        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-                        g.active_count = g.active_count.saturating_sub(1);
-                        self.metrics.set_active(g.active_count);
-                        return Err(e);
+            // 借用时检查 idle 连接的 max_lifetime：过期则关闭并走新建路径
+            let use_entry = idle_entry.as_ref().filter(|e| {
+                if self.config.max_lifetime_ms > 0 {
+                    e.last_used_at.elapsed().as_millis() as u64 <= self.config.max_lifetime_ms
+                } else {
+                    true
+                }
+            });
+            match use_entry {
+                Some(e) => {
+                    self.metrics.inc_cache_hit();
+                    (e.id, e.conn.clone(), true)
+                }
+                None => {
+                    // 过期连接需异步关闭
+                    if let Some(e) = idle_entry {
+                        self.filter_chain.connection_closed(e.id);
+                        let c = e.conn.clone();
+                        tokio::spawn(async move {
+                            let _ = c.close().await;
+                        });
                     }
-                };
-                let c = Arc::new(c);
-                self.filter_chain.connection_created(id);
-                (id, c, false)
+                    let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+                    let timeout = self.config.connect_timeout();
+                    let c = match self
+                        .driver
+                        .connect(
+                            &self.config.url,
+                            &self.config.username,
+                            &self.config.password,
+                            Some(timeout),
+                        )
+                        .await
+                    {
+                        Ok(conn) => conn,
+                        Err(e) => {
+                            let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+                            g.active_count = g.active_count.saturating_sub(1);
+                            self.metrics.set_active(g.active_count);
+                            return Err(e);
+                        }
+                    };
+                    let c = Arc::new(c);
+                    self.filter_chain.connection_created(id);
+                    (id, c, false)
+                }
             }
         };
 
@@ -239,7 +284,9 @@ impl<D: Driver> DruidDataSource<D> {
                     self.metrics.set_idle(g.idle.len());
                     self.filter_chain.connection_closed(conn_id);
                     let c = conn.clone();
-                    tokio::spawn(async move { let _ = c.close().await; });
+                    tokio::spawn(async move {
+                        let _ = c.close().await;
+                    });
                 } else {
                     self.filter_chain.connection_closed(conn_id);
                 }
@@ -254,6 +301,8 @@ impl<D: Driver> DruidDataSource<D> {
             inner: self.inner.clone(),
             filter_chain: self.filter_chain.clone(),
             metrics: self.metrics.clone(),
+            driver: self.driver.clone(),
+            test_on_return: self.config.test_on_return,
         })
     }
 
@@ -281,10 +330,17 @@ impl<D: Driver> DruidDataSource<D> {
     // ── 状态查询 ──
 
     pub fn active_count(&self) -> usize {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).active_count
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .active_count
     }
     pub fn idle_count(&self) -> usize {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).idle.len()
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .idle
+            .len()
     }
     pub fn max_active(&self) -> usize {
         self.config.max_active
@@ -300,10 +356,20 @@ impl<D: Driver> DruidDataSource<D> {
     }
 
     pub async fn close(&self) -> Result<(), DruidError> {
-        if let Some(h) = self.evict_handle.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some(h) = self
+            .evict_handle
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
             h.abort();
         }
-        if let Some(h) = self.keepalive_handle.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some(h) = self
+            .keepalive_handle
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
             h.abort();
         }
         let conns: Vec<PoolEntry<D::Connection>> = {
@@ -322,18 +388,20 @@ impl<D: Driver> DruidDataSource<D> {
 }
 
 /// 池连接 Guard — Drop 时自动归还
-pub struct PoolGuard<C: Connection> {
-    conn: Arc<C>,
+pub struct PoolGuard<D: Driver> {
+    conn: Arc<D::Connection>,
     conn_id: u64,
     #[allow(dead_code)]
     permit: Option<tokio::sync::OwnedSemaphorePermit>,
-    inner: Arc<Mutex<PoolInner<C>>>,
+    inner: Arc<Mutex<PoolInner<D::Connection>>>,
     filter_chain: Arc<FilterChain>,
     metrics: Arc<PoolMetrics>,
+    driver: Arc<D>,
+    test_on_return: bool,
 }
 
-impl<C: Connection> PoolGuard<C> {
-    pub fn connection(&self) -> &Arc<C> {
+impl<D: Driver> PoolGuard<D> {
+    pub fn connection(&self) -> &Arc<D::Connection> {
         &self.conn
     }
     pub fn connection_id(&self) -> u64 {
@@ -341,12 +409,44 @@ impl<C: Connection> PoolGuard<C> {
     }
 }
 
-impl<C: Connection> Drop for PoolGuard<C> {
+impl<D: Driver> Drop for PoolGuard<D> {
     fn drop(&mut self) {
+        self.metrics.dec_waiting();
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         g.active_count = g.active_count.saturating_sub(1);
         self.metrics.set_active(g.active_count);
         if !g.closed {
+            if self.test_on_return {
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    let driver = self.driver.clone();
+                    let conn = self.conn.clone();
+                    let conn_id = self.conn_id;
+                    let inner = self.inner.clone();
+                    let fc = self.filter_chain.clone();
+                    let m = self.metrics.clone();
+                    handle.spawn(async move {
+                        if driver.validate(&conn).await.is_err() {
+                            tracing::warn!(
+                                "test_on_return validation failed for connection {}",
+                                conn_id
+                            );
+                            fc.connection_closed(conn_id);
+                            let _ = conn.close().await;
+                        } else {
+                            let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
+                            fc.connection_returned(conn_id);
+                            g.idle.push_back(PoolEntry {
+                                conn,
+                                last_used_at: Instant::now(),
+                                id: conn_id,
+                            });
+                            m.set_idle(g.idle.len());
+                        }
+                    });
+                    return;
+                }
+                // fallthrough if no tokio runtime
+            }
             self.filter_chain.connection_returned(self.conn_id);
             g.idle.push_back(PoolEntry {
                 conn: self.conn.clone(),
