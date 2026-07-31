@@ -101,12 +101,14 @@ impl<D: Driver> DruidDataSource<D> {
                     let now = Instant::now();
                     let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
                     let current_idle = g.idle.len();
+                    let mut evicted = 0usize;
                     let mut to_evict: Vec<PoolEntry<D::Connection>> = Vec::new();
                     g.idle.retain(|e| {
                         let idle_ms = now.duration_since(e.last_used_at).as_millis() as u64;
-                        let over_max_idle = current_idle > min_idle && idle_ms > max_idle_ms;
+                        let over_max_idle = (current_idle - evicted) > min_idle && idle_ms > max_idle_ms;
                         let over_lifetime = max_lifetime_ms > 0 && idle_ms > max_lifetime_ms;
                         if over_max_idle || over_lifetime {
+                            evicted += 1;
                             to_evict.push(PoolEntry { conn: e.conn.clone(), last_used_at: e.last_used_at, id: e.id });
                             false
                         } else {

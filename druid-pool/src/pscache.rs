@@ -51,7 +51,7 @@ impl PSCache {
             sql.to_string(),
             PSEntry {
                 sql: sql.to_string(),
-                hit_count: 0,
+                hit_count: 1,
             },
         );
     }

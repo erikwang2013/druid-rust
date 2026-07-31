@@ -14,3 +14,4 @@ rand.workspace = true
 aes-gcm.workspace = true
 zeroize.workspace = true
 tracing.workspace = true
+base64 = "0.22"

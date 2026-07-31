@@ -9,6 +9,7 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#x27;")
+        .replace('/', "&#x2F;")
 }
 
 fn json_or_error<T: serde::Serialize>(value: &T) -> Json<serde_json::Value> {

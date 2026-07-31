@@ -465,7 +465,9 @@ impl Parser {
                         true,
                     );
                 }
-                _ => {} // unrecognized NOT combination, ignore
+                _ => {
+                    tracing::warn!("unrecognized NOT combination: {:?}", self.current);
+                }
             }
         }
         // BETWEEN
@@ -888,16 +890,13 @@ impl Parser {
                 dt.push_str(s);
                 self.advance();
             }
-            Token::Int | Token::BigInt | Token::SmallInt | Token::TinyInt => {
-                dt.push_str(&format!("{:?}", self.current).to_uppercase());
-                self.advance();
-            }
-            Token::VarChar | Token::Char | Token::Text | Token::Boolean
-            | Token::Float | Token::Double | Token::Decimal | Token::Numeric
+            Token::Int | Token::BigInt | Token::SmallInt | Token::TinyInt
+            | Token::VarChar | Token::Char | Token::Text | Token::Boolean
+            | Token::Float | Token::Double | Token::Decimal
             | Token::Real | Token::Date | Token::Time | Token::Timestamp
             | Token::Blob | Token::Clob | Token::Json | Token::Jsonb
             | Token::Xml | Token::Uuid | Token::Bytea => {
-                dt.push_str(&format!("{:?}", self.current).to_uppercase());
+                dt.push_str(self.current.as_type_name());
                 self.advance();
             }
             _ => {
@@ -908,13 +907,9 @@ impl Parser {
         if self.current == Token::LParen {
             self.advance();
             dt.push('(');
-            loop {
-                if let Token::Number(n) | Token::Ident(n) = &self.current {
-                    dt.push_str(n);
-                    self.advance();
-                } else {
-                    break;
-                }
+            while let Token::Number(n) | Token::Ident(n) = &self.current {
+                dt.push_str(n);
+                self.advance();
                 if self.current == Token::Comma {
                     dt.push_str(", ");
                     self.advance();
@@ -972,6 +967,9 @@ pub fn parse_sql(sql: &str) -> ParseResult<Vec<SQLStatement>> {
             }
             if parser.current == Token::Eof {
                 break;
+            }
+            if i == MAX_ITERATIONS - 1 {
+                tracing::warn!("parse_sql reached MAX_ITERATIONS ({}), remaining input truncated", MAX_ITERATIONS);
             }
             continue;
         }

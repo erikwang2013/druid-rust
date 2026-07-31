@@ -244,7 +244,7 @@ impl Lexer {
                             self.advance();
                             Token::Concat
                         } else {
-                            return Token::Ident("|".to_string());
+                            Token::Ident("|".to_string())
                         }
                     }
                     _ => Token::Ident(c.to_string()),

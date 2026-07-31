@@ -102,7 +102,6 @@ pub enum Token {
     Float,
     Double,
     Decimal,
-    Numeric,
     Real,
     Date,
     Time,
@@ -175,6 +174,36 @@ impl fmt::Display for Token {
             Token::RParen => write!(f, ")"),
             Token::Eof => write!(f, "<EOF>"),
             _ => write!(f, "{}", format!("{:?}", self).to_uppercase()),
+        }
+    }
+}
+
+impl Token {
+    pub fn as_type_name(&self) -> &'static str {
+        match self {
+            Token::Int => "INT",
+            Token::BigInt => "BIGINT",
+            Token::SmallInt => "SMALLINT",
+            Token::TinyInt => "TINYINT",
+            Token::VarChar => "VARCHAR",
+            Token::Char => "CHAR",
+            Token::Text => "TEXT",
+            Token::Boolean => "BOOLEAN",
+            Token::Float => "FLOAT",
+            Token::Double => "DOUBLE",
+            Token::Decimal => "DECIMAL",
+            Token::Real => "REAL",
+            Token::Date => "DATE",
+            Token::Time => "TIME",
+            Token::Timestamp => "TIMESTAMP",
+            Token::Blob => "BLOB",
+            Token::Clob => "CLOB",
+            Token::Json => "JSON",
+            Token::Jsonb => "JSONB",
+            Token::Xml => "XML",
+            Token::Uuid => "UUID",
+            Token::Bytea => "BYTEA",
+            _ => "UNKNOWN",
         }
     }
 }
