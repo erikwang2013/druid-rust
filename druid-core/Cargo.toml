@@ -9,7 +9,5 @@ authors.workspace = true
 [dependencies]
 thiserror.workspace = true
 serde.workspace = true
-parking_lot.workspace = true
 chrono.workspace = true
 tracing.workspace = true
-once_cell.workspace = true

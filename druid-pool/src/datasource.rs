@@ -170,7 +170,10 @@ impl<D: Driver> DruidDataSource<D> {
             let entry = {
                 let mut g = self.inner.lock().unwrap();
                 g.active_count += 1;
-                g.idle.pop_front()
+                let e = g.idle.pop_front();
+                self.metrics.set_active(g.active_count);
+                self.metrics.set_idle(g.idle.len());
+                e
             };
             if let Some(e) = entry {
                 (e.id, e.conn)
@@ -309,6 +312,11 @@ impl<C: Connection> Drop for PoolGuard<C> {
                         let _ = c.close().await;
                     });
                 });
+            } else {
+                tracing::warn!(
+                    "PoolGuard dropped outside tokio runtime, connection {} may leak",
+                    self.conn_id
+                );
             }
         }
         // permit auto-released

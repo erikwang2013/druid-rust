@@ -12,12 +12,10 @@ druid-filter = { path = "../druid-filter" }
 druid-stat = { path = "../druid-stat" }
 druid-util = { path = "../druid-util" }
 tokio = { workspace = true, features = ["sync", "time", "rt"] }
-parking_lot.workspace = true
 tracing.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
-once_cell.workspace = true
 async-trait.workspace = true
 
 [dev-dependencies]

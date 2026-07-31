@@ -53,7 +53,7 @@ pub struct DruidConfig {
     #[serde(default)]
     pub validation_query_timeout_secs: u64,
 
-    // PSCache
+    // PSCache (暂未接入 — 开启后无实际效果)
     /// 是否开启 PreparedStatement 缓存
     #[serde(default)]
     pub pool_prepared_statements: bool,

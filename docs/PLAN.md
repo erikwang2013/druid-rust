@@ -285,16 +285,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 async-trait = "0.1"
 thiserror = "2"
-anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
-metrics = "0.24"
 parking_lot = "0.12"
-figment = { version = "0.10", features = ["toml", "yaml", "env"] }
 criterion = "0.5"
-proptest = "1"
-askama = "0.12"
-once_cell = "1"
 chrono = { version = "0.4", features = ["serde"] }
 ```
 
@@ -326,6 +320,6 @@ druid-core ───────────────────────
 ---
 
 **创建日期**: 2026-07-31
-**状态**: 全部阶段已完成 (v1.0.5)
+**状态**: 全部阶段已完成 (v1.0.7)
 **审查报告**: [REVIEW_REPORT.md](REVIEW_REPORT.md)
 **基于**: alibaba/druid v1.2.24, coding-to-rust/java-to-rust v2026-07-30

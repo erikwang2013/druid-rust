@@ -454,7 +454,7 @@ impl Filter for MyLogFilter {
 
 ```toml
 [workspace.package]
-version = "1.0.6"
+version = "1.0.7"
 ```
 
 所有 10 个子 crate 通过 `version.workspace = true` 继承，修改版本号只需改一处。
@@ -473,7 +473,7 @@ cargo build --release    # LTO + codegen-units=1
 cargo check --workspace          # 快速检查编译
 cargo clippy --all-targets       # Lint 检查（当前: 0 warnings）
 cargo fmt --all                  # 格式化
-cargo test --workspace           # 49 passed; 0 failed
+cargo test --workspace           # 61 passed; 0 failed
 ```
 
 ### 运行基准
@@ -492,17 +492,17 @@ cargo run --example basic
 
 | Crate | 测试数 |
 |-------|--------|
-| druid-core | 0 |
+| druid-core | 7 |
 | druid-util | 15 |
 | druid-sql | 8 |
 | druid-filter | 5 |
 | druid-wall | 7 |
 | druid-pool | 7 |
 | druid-stat | 3 |
-| druid-console | 0 |
+| druid-console | 5 |
 | druid-proxy | 2 |
 | druid-ha | 2 |
-| **总计** | **49** |
+| **总计** | **61** |
 
 ## 审查报告
 
@@ -510,7 +510,7 @@ cargo run --example basic
 
 - `cargo check`: ✅ 零警告
 - `cargo clippy --all-targets`: ✅ 零警告
-- `cargo test`: ✅ 49/49 通过
+- `cargo test`: ✅ 61/61 通过
 - `cargo fmt --all`: ✅ 格式一致
 
 ## License

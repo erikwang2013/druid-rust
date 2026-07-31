@@ -1,7 +1,7 @@
 # Druid-Rust
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-49%20passed-green)]()
+[![Tests](https://img.shields.io/badge/tests-61%20passed-green)]()
 
 [中文文档](../README.md) | English
 
@@ -350,7 +350,7 @@ Key differences from Java:
 cargo check --workspace          # Quick compile check
 cargo clippy --all-targets       # Lint check (current: 0 warnings)
 cargo fmt --all                  # Format
-cargo test --workspace           # 49 passed; 0 failed
+cargo test --workspace           # 61 passed; 0 failed
 ```
 
 ### Benchmarks
@@ -369,16 +369,17 @@ cargo run --example basic
 
 | Crate | Tests |
 |-------|-------|
-| druid-core | 0 |
+| druid-core | 7 |
 | druid-util | 15 |
 | druid-sql | 8 |
 | druid-filter | 5 |
 | druid-wall | 7 |
 | druid-pool | 7 |
 | druid-stat | 3 |
+| druid-console | 5 |
 | druid-proxy | 2 |
 | druid-ha | 2 |
-| **Total** | **49** |
+| **Total** | **61** |
 
 ## Review Report
 
@@ -386,7 +387,7 @@ Latest code review: [REVIEW_REPORT.md](REVIEW_REPORT.md)
 
 - `cargo check`: ✅ Zero warnings
 - `cargo clippy --all-targets`: ✅ Zero warnings
-- `cargo test`: ✅ 49/49 passed
+- `cargo test`: ✅ 61/61 passed
 - `cargo fmt --all`: ✅ Consistent formatting
 
 ## License

@@ -114,3 +114,52 @@ impl DbType {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_mysql() {
+        assert_eq!(DbType::parse("mysql"), DbType::MySQL);
+        assert_eq!(DbType::parse("MySQL"), DbType::MySQL);
+    }
+
+    #[test]
+    fn test_parse_postgres_aliases() {
+        assert_eq!(DbType::parse("postgresql"), DbType::PostgreSQL);
+        assert_eq!(DbType::parse("postgres"), DbType::PostgreSQL);
+        assert_eq!(DbType::parse("pgsql"), DbType::PostgreSQL);
+    }
+
+    #[test]
+    fn test_parse_sqlserver_aliases() {
+        assert_eq!(DbType::parse("sqlserver"), DbType::SqlServer);
+        assert_eq!(DbType::parse("mssql"), DbType::SqlServer);
+        assert_eq!(DbType::parse("sql server"), DbType::SqlServer);
+    }
+
+    #[test]
+    fn test_parse_dm_aliases() {
+        assert_eq!(DbType::parse("dm"), DbType::DM);
+        assert_eq!(DbType::parse("dameng"), DbType::DM);
+    }
+
+    #[test]
+    fn test_parse_oracle() {
+        assert_eq!(DbType::parse("oracle"), DbType::Oracle);
+    }
+
+    #[test]
+    fn test_parse_unknown_fallback() {
+        assert_eq!(DbType::parse("unknown_db"), DbType::Other);
+        assert_eq!(DbType::parse(""), DbType::Other);
+    }
+
+    #[test]
+    fn test_db_type_names() {
+        assert_eq!(DbType::MySQL.name(), "MySQL");
+        assert_eq!(DbType::PostgreSQL.name(), "PostgreSQL");
+        assert_eq!(DbType::Oracle.name(), "Oracle");
+    }
+}

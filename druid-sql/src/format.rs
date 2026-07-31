@@ -4,7 +4,7 @@ use std::fmt::Write;
 /// 将 SQL AST 格式化输出为 SQL 字符串
 pub fn format_statement(stmt: &SQLStatement) -> String {
     match stmt {
-        SQLStatement::Select(s) => format_select(s, 0),
+        SQLStatement::Select(s) => format_select(s),
         SQLStatement::Insert(s) => format_insert(s),
         SQLStatement::Update(s) => format_update(s),
         SQLStatement::Delete(s) => format_delete(s),
@@ -13,7 +13,7 @@ pub fn format_statement(stmt: &SQLStatement) -> String {
     }
 }
 
-fn format_select(stmt: &SelectStatement, _indent: usize) -> String {
+fn format_select(stmt: &SelectStatement) -> String {
     let mut s = String::new();
     s.push_str("SELECT ");
     if stmt.distinct {

@@ -40,13 +40,26 @@ pub fn snake_to_camel(s: &str) -> String {
 }
 
 /// 简单 SQL 参数替换（? 占位符）
+///
+/// 使用占位符标记避免二次替换：参数值中的 ? 不会干扰替换。
 pub fn substitute_params(sql: &str, params: &[&str]) -> String {
-    let mut result = sql.to_string();
-    for param in params {
-        if let Some(pos) = result.find('?') {
-            let quoted = format!("'{}'", param.replace('\'', "''"));
-            result.replace_range(pos..pos + 1, &quoted);
+    const MARKER: &str = "\x00PARAM\x00";
+    let mut result = String::with_capacity(sql.len() + params.len() * 8);
+    let mut param_idx = 0;
+    for ch in sql.chars() {
+        if ch == '?' && param_idx < params.len() {
+            result.push_str(MARKER);
+            result.push_str(&param_idx.to_string());
+            result.push_str(MARKER);
+            param_idx += 1;
+        } else {
+            result.push(ch);
         }
+    }
+    for (i, param) in params.iter().enumerate().take(param_idx) {
+        let quoted = format!("'{}'", param.replace('\'', "''"));
+        let placeholder = format!("{}{}{}", MARKER, i, MARKER);
+        result = result.replace(&placeholder, &quoted);
     }
     result
 }

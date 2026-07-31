@@ -107,3 +107,84 @@ th{{background:#fafafa;font-weight:bold}}</style></head>
 
     axum::response::Html(html)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use axum::Router;
+    use druid_stat::StatFilter;
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    fn test_app() -> Router {
+        let stat_filter = Arc::new(StatFilter::new("test-ds", 1000));
+        let state = Arc::new(AppState { stat_filter });
+        Router::new()
+            .route("/druid/stat.json", get(stat_json))
+            .route("/druid/sql.json", get(sql_json))
+            .route("/druid/slow-sql.json", get(slow_sql_json))
+            .route("/druid/index.html", get(index_page))
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn test_stat_json_endpoint() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/stat.json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_sql_json_endpoint() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/sql.json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_slow_sql_json_endpoint() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/slow-sql.json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_index_html_endpoint() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/index.html")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 10240)
+            .await
+            .unwrap();
+        let html = String::from_utf8_lossy(&body);
+        assert!(html.contains("Druid Monitor"));
+        assert!(html.contains("<!DOCTYPE html>"));
+    }
+
+    #[tokio::test]
+    async fn test_html_escape_xss() {
+        let escaped = html_escape("<script>alert('xss')</script>");
+        assert!(!escaped.contains('<'));
+        assert!(!escaped.contains('>'));
+        assert!(escaped.contains("&lt;"));
+        assert!(escaped.contains("&gt;"));
+    }
+}
