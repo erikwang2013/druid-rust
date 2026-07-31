@@ -56,8 +56,8 @@ pub fn detect_db_type_from_url(url: &str) -> Option<DbType> {
 }
 
 fn scheme_contains(url: &str, pat: &str) -> bool {
-    if let Some(idx) = url.find(pat) {
-        idx < url.find("://").unwrap_or(url.len()).saturating_add(10)
+    if let Some(colon_idx) = url.find("://") {
+        url[..colon_idx].contains(pat)
     } else {
         false
     }

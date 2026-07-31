@@ -1,5 +1,6 @@
 use druid_core::DruidError;
 use std::fmt::Debug;
+use std::time::Duration;
 
 /// 数据库驱动接口 — Rust 版 JDBC 抽象
 ///
@@ -14,6 +15,7 @@ pub trait Driver: Send + Sync + 'static {
         url: &str,
         username: &str,
         password: &str,
+        timeout: Option<Duration>,
     ) -> Result<Self::Connection, DruidError>;
 
     /// 驱动名称

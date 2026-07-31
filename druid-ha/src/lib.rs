@@ -80,7 +80,7 @@ impl<D: Driver> HighAvailableDataSource<D> {
         let active: Vec<&Arc<HaNode<D>>> = self
             .nodes
             .iter()
-            .filter(|n| *n.status.lock().unwrap() == NodeStatus::Active)
+            .filter(|n| *n.status.lock().unwrap_or_else(|e| e.into_inner()) == NodeStatus::Active)
             .collect();
 
         if active.is_empty() {
@@ -106,7 +106,7 @@ impl<D: Driver> HighAvailableDataSource<D> {
     pub fn mark_down(&self, name: &str) {
         for node in &self.nodes {
             if node.name == name {
-                *node.status.lock().unwrap() = NodeStatus::Down;
+                *node.status.lock().unwrap_or_else(|e| e.into_inner()) = NodeStatus::Down;
                 tracing::warn!("HA node {} marked DOWN", name);
                 return;
             }
@@ -117,7 +117,7 @@ impl<D: Driver> HighAvailableDataSource<D> {
     pub fn mark_up(&self, name: &str) {
         for node in &self.nodes {
             if node.name == name {
-                *node.status.lock().unwrap() = NodeStatus::Active;
+                *node.status.lock().unwrap_or_else(|e| e.into_inner()) = NodeStatus::Active;
                 tracing::info!("HA node {} marked ACTIVE", name);
                 return;
             }
@@ -133,7 +133,7 @@ impl<D: Driver> HighAvailableDataSource<D> {
     pub fn active_count(&self) -> usize {
         self.nodes
             .iter()
-            .filter(|n| *n.status.lock().unwrap() == NodeStatus::Active)
+            .filter(|n| *n.status.lock().unwrap_or_else(|e| e.into_inner()) == NodeStatus::Active)
             .count()
     }
 
@@ -145,7 +145,7 @@ impl<D: Driver> HighAvailableDataSource<D> {
     /// 执行一轮健康检查
     pub async fn run_health_check(self: &Arc<Self>) {
         for node in &self.nodes {
-            let status = { node.status.lock().unwrap().clone() };
+            let status = { node.status.lock().unwrap_or_else(|e| e.into_inner()).clone() };
             match status {
                 NodeStatus::Active => {
                     if let Ok(guard) = node.datasource.get_connection().await {
@@ -156,13 +156,13 @@ impl<D: Driver> HighAvailableDataSource<D> {
                 }
                 NodeStatus::Down => {
                     {
-                        *node.status.lock().unwrap() = NodeStatus::Testing;
+                        *node.status.lock().unwrap_or_else(|e| e.into_inner()) = NodeStatus::Testing;
                     }
                     if let Ok(guard) = node.datasource.get_connection().await {
                         drop(guard);
                         self.mark_up(&node.name);
                     } else {
-                        *node.status.lock().unwrap() = NodeStatus::Down;
+                        *node.status.lock().unwrap_or_else(|e| e.into_inner()) = NodeStatus::Down;
                     }
                 }
                 NodeStatus::Testing => {}
@@ -212,7 +212,7 @@ mod tests {
             Ok(vec![])
         }
         async fn close(&self) -> Result<(), DruidError> {
-            *self.closed.lock().unwrap() = true;
+            *self.closed.lock().unwrap_or_else(|e| e.into_inner()) = true;
             Ok(())
         }
         async fn ping(&self) -> Result<(), DruidError> {
@@ -238,7 +238,7 @@ mod tests {
     #[async_trait::async_trait]
     impl Driver for MockHaDriver {
         type Connection = MockHaConn;
-        async fn connect(&self, _: &str, _: &str, _: &str) -> Result<MockHaConn, DruidError> {
+        async fn connect(&self, _: &str, _: &str, _: &str, _: Option<std::time::Duration>) -> Result<MockHaConn, DruidError> {
             let id = self.connect_count.fetch_add(1, Ordering::SeqCst) + 1;
             Ok(MockHaConn::new(id))
         }

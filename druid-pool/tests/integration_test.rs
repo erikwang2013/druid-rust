@@ -49,6 +49,7 @@ impl Driver for MockDriver {
         _url: &str,
         _user: &str,
         _pass: &str,
+        _timeout: Option<std::time::Duration>,
     ) -> Result<MockConnection, DruidError> {
         tokio::time::sleep(self.connect_latency).await;
         let id = self.connect_count.fetch_add(1, Ordering::SeqCst) + 1;

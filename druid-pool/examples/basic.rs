@@ -43,7 +43,7 @@ mod mock {
     #[async_trait::async_trait]
     impl Driver for MockDriver {
         type Connection = MockConn;
-        async fn connect(&self, _: &str, _: &str, _: &str) -> Result<MockConn, DruidError> {
+        async fn connect(&self, _: &str, _: &str, _: &str, _: Option<std::time::Duration>) -> Result<MockConn, DruidError> {
             let id = self.count.fetch_add(1, Ordering::SeqCst) + 1;
             Ok(MockConn {
                 id,

@@ -63,16 +63,31 @@ impl Parser {
 
     fn parse_select(&mut self) -> ParseResult<SelectStatement> {
         let mut distinct = false;
-        // WITH CTE: 当前跳过 CTE 名称和列定义，直接定位到 SELECT 语句体。
-        // 完整实现需解析 cte_name [(col1,...)] AS (query)。
         if self.current == Token::With {
             self.advance();
             if self.current == Token::Recursive {
                 self.advance();
             }
-            // 跳过 CTE 定义直到 )
-            while self.current != Token::Select && self.current != Token::Eof {
-                self.advance();
+            loop {
+                self.parse_ident()?;
+                if self.current == Token::LParen {
+                    self.advance();
+                    loop {
+                        self.parse_ident()?;
+                        if self.current == Token::Comma { self.advance(); }
+                        else { break; }
+                    }
+                    self.expect(Token::RParen)?;
+                }
+                self.expect(Token::As)?;
+                self.expect(Token::LParen)?;
+                let _ = self.parse_select()?;
+                self.expect(Token::RParen)?;
+                if self.current == Token::Comma {
+                    self.advance();
+                } else {
+                    break;
+                }
             }
         }
         self.advance(); // skip SELECT
@@ -795,8 +810,13 @@ impl Parser {
         self.expect(Token::LParen)?;
         let mut columns = Vec::new();
         loop {
-            if self.current == Token::Primary || self.current == Token::Constraint {
-                // 跳过约束定义
+            if self.current == Token::Primary
+                || self.current == Token::Constraint
+                || self.current == Token::Foreign
+                || self.current == Token::Unique
+                || self.current == Token::Check
+                || self.current == Token::Index
+            {
                 while self.current != Token::Comma
                     && self.current != Token::RParen
                     && self.current != Token::Eof
@@ -809,21 +829,42 @@ impl Parser {
                 continue;
             }
             let name = self.parse_ident()?;
-            let data_type = format!("{:?}", self.current);
-            self.advance();
-            let nullable = true;
-            let is_primary_key = false;
-            if self.current == Token::Primary {
-                self.advance();
-                if self.current == Token::Key {
-                    self.advance();
+            let data_type = self.parse_data_type()?;
+            let mut nullable = true;
+            let mut default_value = None;
+            let mut is_primary_key = false;
+            loop {
+                match &self.current {
+                    Token::Not => {
+                        self.advance();
+                        if self.current == Token::Null {
+                            self.advance();
+                            nullable = false;
+                        }
+                    }
+                    Token::Null => {
+                        self.advance();
+                        nullable = true;
+                    }
+                    Token::Primary => {
+                        self.advance();
+                        if self.current == Token::Key {
+                            self.advance();
+                        }
+                        is_primary_key = true;
+                    }
+                    Token::Default => {
+                        self.advance();
+                        default_value = Some(self.parse_expr()?);
+                    }
+                    _ => break,
                 }
             }
             columns.push(ColumnDef {
                 name,
                 data_type,
                 nullable,
-                default_value: None,
+                default_value,
                 is_primary_key,
             });
             if self.current == Token::Comma {
@@ -838,6 +879,53 @@ impl Parser {
             table,
             columns,
         })
+    }
+
+    fn parse_data_type(&mut self) -> ParseResult<String> {
+        let mut dt = String::new();
+        match &self.current {
+            Token::Ident(s) | Token::QuotedIdent(s) => {
+                dt.push_str(s);
+                self.advance();
+            }
+            Token::Int | Token::BigInt | Token::SmallInt | Token::TinyInt => {
+                dt.push_str(&format!("{:?}", self.current).to_uppercase());
+                self.advance();
+            }
+            Token::VarChar | Token::Char | Token::Text | Token::Boolean
+            | Token::Float | Token::Double | Token::Decimal | Token::Numeric
+            | Token::Real | Token::Date | Token::Time | Token::Timestamp
+            | Token::Blob | Token::Clob | Token::Json | Token::Jsonb
+            | Token::Xml | Token::Uuid | Token::Bytea => {
+                dt.push_str(&format!("{:?}", self.current).to_uppercase());
+                self.advance();
+            }
+            _ => {
+                dt.push_str(&format!("{:?}", self.current));
+                self.advance();
+            }
+        }
+        if self.current == Token::LParen {
+            self.advance();
+            dt.push('(');
+            loop {
+                if let Token::Number(n) | Token::Ident(n) = &self.current {
+                    dt.push_str(n);
+                    self.advance();
+                } else {
+                    break;
+                }
+                if self.current == Token::Comma {
+                    dt.push_str(", ");
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            self.expect(Token::RParen)?;
+            dt.push(')');
+        }
+        Ok(dt)
     }
 
     fn parse_drop_table(&mut self) -> ParseResult<DropTableStatement> {

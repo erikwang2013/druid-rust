@@ -28,19 +28,32 @@ impl WallProvider {
             self.hit_count += 1;
             return r.clone();
         }
-        let r = self.checker.quick_check(sql);
-        if !r.allowed {
-            self.cache_insert(sql, r.clone());
-            return r;
-        }
+        let quick = self.checker.quick_check(sql);
+        let mut ast_deny: Option<WallCheckResult> = None;
         if let Ok(stmts) = druid_sql::parse_sql(sql) {
             for s in &stmts {
                 let x = self.checker.check(sql, s);
                 if !x.allowed {
-                    self.cache_insert(sql, x.clone());
-                    return x;
+                    ast_deny = Some(x);
+                    break;
                 }
             }
+        } else {
+            let preview: String = sql.chars().take(200).collect();
+            tracing::warn!(
+                "Wall AST check skipped: SQL parse failed for '{}'",
+                preview
+            );
+        }
+        if let Some(deny) = ast_deny {
+            self.cache_insert(sql, deny.clone());
+            return deny;
+        }
+        if !quick.allowed {
+            tracing::warn!(
+                "Wall quick_check denied but AST check passed (possible false positive): '{}'",
+                sql.chars().take(200).collect::<String>()
+            );
         }
         let pass = WallCheckResult::pass();
         self.cache_insert(sql, pass.clone());

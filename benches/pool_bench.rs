@@ -25,7 +25,7 @@ impl BenchDriver { fn new() -> Self { BenchDriver { count: AtomicU64::new(0) } }
 #[async_trait::async_trait]
 impl Driver for BenchDriver {
     type Connection = BenchConn;
-    async fn connect(&self, _: &str, _: &str, _: &str) -> Result<BenchConn, DruidError> {
+    async fn connect(&self, _: &str, _: &str, _: &str, _: Option<std::time::Duration>) -> Result<BenchConn, DruidError> {
         let id = self.count.fetch_add(1, Ordering::SeqCst) + 1;
         Ok(BenchConn::new(id))
     }

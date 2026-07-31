@@ -172,6 +172,9 @@ impl SchemaVisitor {
             SQLExpr::IsNull { expr, .. } => {
                 self.visit_expr(expr, table);
             }
+            SQLExpr::UnaryOp { expr, .. } => {
+                self.visit_expr(expr, table);
+            }
             SQLExpr::InSubQuery { expr, query, .. } => {
                 self.visit_expr(expr, table);
                 self.visit_statement(query);

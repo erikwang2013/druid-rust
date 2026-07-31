@@ -33,6 +33,7 @@ impl PoolMetrics {
     pub fn inc_waiting(&self) {
         self.waiting_count.fetch_add(1, Ordering::Relaxed);
     }
+    #[expect(dead_code)]
     pub fn dec_waiting(&self) {
         self.waiting_count.fetch_sub(1, Ordering::Relaxed);
     }

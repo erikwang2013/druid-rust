@@ -40,6 +40,7 @@ impl Driver for BenchDriver {
         _: &str,
         _: &str,
         _: &str,
+        _: Option<std::time::Duration>,
     ) -> Result<BenchConn, druid_core::DruidError> {
         Ok(BenchConn {
             id: self.count.fetch_add(1, Ordering::SeqCst) + 1,

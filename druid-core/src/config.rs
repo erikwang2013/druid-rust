@@ -33,9 +33,12 @@ pub struct DruidConfig {
     /// 连接最小生存时间(毫秒)，默认 30min
     #[serde(default = "DruidConfig::default_min_evictable")]
     pub min_evictable_idle_time_ms: u64,
-    /// 连接最大生存时间(毫秒)，默认 7h
+    /// 连接空闲最大生存时间(毫秒)，默认 7h
     #[serde(default = "DruidConfig::default_max_evictable")]
     pub max_evictable_idle_time_ms: u64,
+    /// 连接绝对最大生命周期(毫秒)，默认 0 表示不限制
+    #[serde(default)]
+    pub max_lifetime_ms: u64,
 
     // 验证参数
     /// 获取连接时是否验证
@@ -128,6 +131,7 @@ impl DruidConfig {
             time_between_eviction_runs_ms: Self::default_time_between_eviction_runs_ms(),
             min_evictable_idle_time_ms: Self::default_min_evictable(),
             max_evictable_idle_time_ms: Self::default_max_evictable(),
+            max_lifetime_ms: 0,
             test_on_borrow: true,
             test_on_return: false,
             test_while_idle: false,

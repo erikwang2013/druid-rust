@@ -52,8 +52,12 @@ impl Lexer {
 
     fn read_number(&mut self) -> String {
         let mut s = String::new();
+        let mut has_dot = false;
         while let Some(c) = self.peek() {
-            if c.is_ascii_digit() || c == '.' {
+            if c.is_ascii_digit() {
+                s.push(self.advance().expect("peeked char missing"));
+            } else if c == '.' && !has_dot {
+                has_dot = true;
                 s.push(self.advance().expect("peeked char missing"));
             } else {
                 break;
@@ -240,7 +244,7 @@ impl Lexer {
                             self.advance();
                             Token::Concat
                         } else {
-                            Token::Eof // single | is invalid, stop parse
+                            return Token::Ident("|".to_string());
                         }
                     }
                     _ => Token::Ident(c.to_string()),
