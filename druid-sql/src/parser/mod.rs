@@ -63,7 +63,8 @@ impl Parser {
 
     fn parse_select(&mut self) -> ParseResult<SelectStatement> {
         let mut distinct = false;
-        // WITH CTE (暂跳过)
+        // WITH CTE: 当前跳过 CTE 名称和列定义，直接定位到 SELECT 语句体。
+        // 完整实现需解析 cte_name [(col1,...)] AS (query)。
         if self.current == Token::With {
             self.advance();
             if self.current == Token::Recursive {
@@ -860,12 +861,12 @@ impl Parser {
     }
 }
 
-/// 解析 SQL 文本为语句列表
+/// 解析 SQL 文本为语句列表（最多 10,000 条语句）
 pub fn parse_sql(sql: &str) -> ParseResult<Vec<SQLStatement>> {
     const MAX_ITERATIONS: usize = 10_000;
     let mut parser = Parser::new(sql);
     let mut stmts = Vec::new();
-    for _ in 0..MAX_ITERATIONS {
+    for i in 0..MAX_ITERATIONS {
         parser.skip_comments();
         if parser.current == Token::Eof || parser.current == Token::Semicolon {
             if parser.current == Token::Semicolon {
@@ -882,6 +883,9 @@ pub fn parse_sql(sql: &str) -> ParseResult<Vec<SQLStatement>> {
         }
         if parser.current == Token::Eof {
             break;
+        }
+        if i == MAX_ITERATIONS - 1 {
+            tracing::warn!("parse_sql reached MAX_ITERATIONS ({}), remaining input truncated", MAX_ITERATIONS);
         }
     }
     Ok(stmts)

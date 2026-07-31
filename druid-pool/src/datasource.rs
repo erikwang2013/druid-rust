@@ -168,7 +168,7 @@ impl<D: Driver> DruidDataSource<D> {
 
         let wait_ms = start.elapsed().as_millis() as u64;
 
-        let (conn_id, conn): (u64, Arc<D::Connection>) = {
+        let (conn_id, conn, from_idle): (u64, Arc<D::Connection>, bool) = {
             let entry = {
                 let mut g = self.inner.lock().unwrap();
                 g.active_count += 1;
@@ -178,7 +178,7 @@ impl<D: Driver> DruidDataSource<D> {
                 e
             };
             if let Some(e) = entry {
-                (e.id, e.conn)
+                (e.id, e.conn, true)
             } else {
                 let id = self.next_id.fetch_add(1, Ordering::SeqCst);
                 let c = self
@@ -191,7 +191,7 @@ impl<D: Driver> DruidDataSource<D> {
                     .await
                     .map(Arc::new)?;
                 self.filter_chain.connection_created(id);
-                (id, c)
+                (id, c, false)
             }
         };
 
@@ -201,7 +201,23 @@ impl<D: Driver> DruidDataSource<D> {
         self.filter_chain.connection_borrowed(conn_id, wait_ms);
 
         if self.config.test_on_borrow {
-            self.driver.validate(&conn).await?;
+            if let Err(e) = self.driver.validate(&conn).await {
+                // rollback: undo state mutations that were done before validation
+                let mut g = self.inner.lock().unwrap();
+                g.active_count = g.active_count.saturating_sub(1);
+                self.metrics.set_active(g.active_count);
+                if from_idle {
+                    g.idle.push_back(PoolEntry {
+                        conn,
+                        last_used_at: Instant::now(),
+                        id: conn_id,
+                    });
+                    self.metrics.set_idle(g.idle.len());
+                } else {
+                    self.filter_chain.connection_closed(conn_id);
+                }
+                return Err(e);
+            }
         }
 
         Ok(PoolGuard {
