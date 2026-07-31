@@ -160,7 +160,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "druid-console"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "axum",
  "druid-core",
@@ -173,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "druid-core"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "chrono",
  "once_cell",
@@ -185,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "druid-filter"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "druid-core",
  "serde",
@@ -193,8 +193,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "druid-ha"
+version = "1.0.4"
+dependencies = [
+ "async-trait",
+ "druid-core",
+ "druid-pool",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "druid-pool"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "async-trait",
  "chrono",
@@ -210,8 +222,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "druid-proxy"
+version = "1.0.4"
+dependencies = [
+ "druid-core",
+ "druid-filter",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "druid-sql"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "druid-core",
  "proptest",
@@ -222,7 +244,7 @@ dependencies = [
 
 [[package]]
 name = "druid-stat"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "chrono",
  "druid-core",
@@ -233,7 +255,7 @@ dependencies = [
 
 [[package]]
 name = "druid-util"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "chrono",
  "druid-core",
@@ -242,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "druid-wall"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "druid-core",
  "druid-filter",
