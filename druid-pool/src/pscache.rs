@@ -6,6 +6,7 @@ pub struct PSCache {
     max_size: usize,
 }
 
+#[derive(Debug)]
 struct PSEntry {
     #[allow(dead_code)]
     sql: String,

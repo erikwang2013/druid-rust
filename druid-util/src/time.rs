@@ -7,7 +7,9 @@ pub fn current_time_millis() -> i64 {
 
 /// 当前时间戳（纳秒）
 pub fn current_time_nanos() -> i64 {
-    Utc::now().timestamp_nanos_opt().unwrap_or(0)
+    Utc::now()
+        .timestamp_nanos_opt()
+        .unwrap_or_else(|| Utc::now().timestamp_millis() * 1_000_000)
 }
 
 /// 格式化时间戳为字符串

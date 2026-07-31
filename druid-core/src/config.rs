@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// DruidDataSource 连接池配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DruidConfig {
     /// 数据库连接 URL
     pub url: String,
@@ -53,7 +53,7 @@ pub struct DruidConfig {
     #[serde(default)]
     pub validation_query_timeout_secs: u64,
 
-    // PSCache (暂未接入 — 开启后无实际效果)
+    // PSCache（开启后通过 pscache 模块缓存 PreparedStatement 引用）
     /// 是否开启 PreparedStatement 缓存
     #[serde(default)]
     pub pool_prepared_statements: bool,
@@ -173,5 +173,24 @@ impl DruidConfig {
 impl Default for DruidConfig {
     fn default() -> Self {
         DruidConfig::new("", "", "")
+    }
+}
+
+impl std::fmt::Debug for DruidConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DruidConfig")
+            .field("url", &self.url)
+            .field("username", &self.username)
+            .field("password", &"***")
+            .field("driver_class_name", &self.driver_class_name)
+            .field("initial_size", &self.initial_size)
+            .field("min_idle", &self.min_idle)
+            .field("max_active", &self.max_active)
+            .field("max_wait_ms", &self.max_wait_ms)
+            .field("time_between_eviction_runs_ms", &self.time_between_eviction_runs_ms)
+            .field("test_on_borrow", &self.test_on_borrow)
+            .field("keep_alive", &self.keep_alive)
+            .field("pool_prepared_statements", &self.pool_prepared_statements)
+            .finish()
     }
 }

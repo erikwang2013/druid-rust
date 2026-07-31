@@ -52,6 +52,8 @@ async fn slow_sql_json(State(state): State<Arc<AppState>>) -> Json<serde_json::V
     Json(serde_json::to_value(stats).unwrap())
 }
 
+// NOTE: HTML template embedded in Rust string for zero-dependency deployment.
+// For larger pages, consider a template engine like askama.
 async fn index_page(State(state): State<Arc<AppState>>) -> axum::response::Html<String> {
     let stat = state.stat_filter.get_datasource_stat();
     let sql_stats = state.stat_filter.get_sql_stats();

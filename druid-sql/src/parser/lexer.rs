@@ -42,7 +42,7 @@ impl Lexer {
         let mut s = String::new();
         while let Some(c) = self.peek() {
             if c.is_alphanumeric() || c == '_' {
-                s.push(self.advance().unwrap());
+                s.push(self.advance().expect("peeked char missing"));
             } else {
                 break;
             }
@@ -54,7 +54,7 @@ impl Lexer {
         let mut s = String::new();
         while let Some(c) = self.peek() {
             if c.is_ascii_digit() || c == '.' {
-                s.push(self.advance().unwrap());
+                s.push(self.advance().expect("peeked char missing"));
             } else {
                 break;
             }
@@ -238,9 +238,9 @@ impl Lexer {
                     '|' => {
                         if self.peek() == Some('|') {
                             self.advance();
-                            Token::Eq /* 用作 Concat */
+                            Token::Concat
                         } else {
-                            Token::Ident("|".to_string())
+                            Token::Eof // single | is invalid, stop parse
                         }
                     }
                     _ => Token::Ident(c.to_string()),

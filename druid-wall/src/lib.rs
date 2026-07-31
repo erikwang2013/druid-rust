@@ -22,7 +22,7 @@ impl WallFilter {
         }
     }
     pub fn hit_rate(&self) -> f64 {
-        self.provider.lock().unwrap().hit_rate()
+        self.provider.lock().expect("wall lock poisoned").hit_rate()
     }
 }
 
@@ -38,7 +38,7 @@ impl Filter for WallFilter {
 
     fn statement_execute_before(&self, ctx: &FilterContext) -> Result<(), DruidError> {
         if let Some(ref sql) = ctx.sql {
-            let result = self.provider.lock().unwrap().check(sql);
+            let result = self.provider.lock().expect("wall lock poisoned").check(sql);
             if !result.allowed {
                 let msg = result
                     .violations

@@ -138,8 +138,7 @@ pub struct OrderByExpr {
     pub asc: bool,
 }
 
-// 前向声明 SQLStatement（在 statement.rs 中定义）
-// 这里用枚举占位，实际定义在 statement.rs
+/// SQL 语句枚举 — 表示所有 DML/DDL 语句类型
 #[derive(Debug, Clone, PartialEq)]
 pub enum SQLStatement {
     Select(Box<SelectStatement>),

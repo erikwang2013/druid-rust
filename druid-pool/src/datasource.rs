@@ -315,10 +315,8 @@ impl<C: Connection> Drop for PoolGuard<C> {
             self.metrics.set_idle(g.idle.len());
             let c = self.conn.clone();
             if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                tokio::task::spawn_blocking(move || {
-                    handle.block_on(async move {
-                        let _ = c.close().await;
-                    });
+                handle.spawn(async move {
+                    let _ = c.close().await;
                 });
             } else {
                 tracing::warn!(

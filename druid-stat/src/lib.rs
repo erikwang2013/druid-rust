@@ -85,7 +85,7 @@ impl StatFilter {
 
     /// 获取所有 SQL 统计（按总耗时降序排列）
     pub fn get_sql_stats(&self) -> Vec<SqlStat> {
-        let mut stats: Vec<SqlStat> = self.sql_stats.lock().unwrap().values().cloned().collect();
+        let mut stats: Vec<SqlStat> = self.sql_stats.lock().expect("stat lock poisoned").values().cloned().collect();
         stats.sort_by_key(|b| std::cmp::Reverse(b.total_time_ms));
         stats
     }
@@ -100,12 +100,12 @@ impl StatFilter {
 
     /// 获取数据源级别统计
     pub fn get_datasource_stat(&self) -> DataSourceStat {
-        self.ds_stat.lock().unwrap().clone()
+        self.ds_stat.lock().expect("stat lock poisoned").clone()
     }
 
     /// 获取总执行次数
     pub fn execute_count(&self) -> u64 {
-        self.ds_stat.lock().unwrap().execute_count
+        self.ds_stat.lock().expect("stat lock poisoned").execute_count
     }
 }
 
@@ -120,13 +120,13 @@ impl Filter for StatFilter {
     }
 
     fn connection_created(&self, _ctx: &FilterContext) {
-        let mut stat = self.ds_stat.lock().unwrap();
+        let mut stat = self.ds_stat.lock().expect("stat lock poisoned");
         stat.create_count += 1;
         stat.idle_count += 1;
     }
 
     fn connection_borrowed(&self, _ctx: &FilterContext, wait_ms: u64) {
-        let mut stat = self.ds_stat.lock().unwrap();
+        let mut stat = self.ds_stat.lock().expect("stat lock poisoned");
         stat.borrow_count += 1;
         stat.total_wait_time_ms += wait_ms;
         stat.active_count += 1;
@@ -134,28 +134,28 @@ impl Filter for StatFilter {
     }
 
     fn connection_returned(&self, _ctx: &FilterContext) {
-        let mut stat = self.ds_stat.lock().unwrap();
+        let mut stat = self.ds_stat.lock().expect("stat lock poisoned");
         stat.return_count += 1;
         stat.active_count = stat.active_count.saturating_sub(1);
         stat.idle_count += 1;
     }
 
     fn connection_closed(&self, _ctx: &FilterContext) {
-        let mut stat = self.ds_stat.lock().unwrap();
+        let mut stat = self.ds_stat.lock().expect("stat lock poisoned");
         stat.destroy_count += 1;
         stat.active_count = stat.active_count.saturating_sub(1);
         stat.idle_count = stat.idle_count.saturating_sub(1);
     }
 
     fn statement_execute_before(&self, _ctx: &FilterContext) -> Result<(), DruidError> {
-        let mut stat = self.ds_stat.lock().unwrap();
+        let mut stat = self.ds_stat.lock().expect("stat lock poisoned");
         stat.execute_count += 1;
         Ok(())
     }
 
     fn statement_execute_after(&self, ctx: &FilterContext, elapsed_ms: u64, rows: u64) {
         let sql = ctx.sql.as_deref().unwrap_or("UNKNOWN");
-        let mut stats = self.sql_stats.lock().unwrap();
+        let mut stats = self.sql_stats.lock().expect("stat lock poisoned");
         let entry = stats
             .entry(sql.to_string())
             .or_insert_with(|| SqlStat::new(sql));
@@ -173,9 +173,9 @@ impl Filter for StatFilter {
     }
 
     fn statement_error(&self, ctx: &FilterContext, _error: &DruidError) {
-        self.ds_stat.lock().unwrap().error_count += 1;
+        self.ds_stat.lock().expect("stat lock poisoned").error_count += 1;
         if let Some(sql) = &ctx.sql {
-            let mut stats = self.sql_stats.lock().unwrap();
+            let mut stats = self.sql_stats.lock().expect("stat lock poisoned");
             if let Some(entry) = stats.get_mut(sql.as_str()) {
                 entry.error_count += 1;
             }

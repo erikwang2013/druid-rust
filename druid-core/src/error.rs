@@ -27,6 +27,3 @@ pub enum DruidError {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }
-
-pub type PoolResult<T> = Result<T, DruidError>;
-pub type SqlResult<T> = Result<T, DruidError>;

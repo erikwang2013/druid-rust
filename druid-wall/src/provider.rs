@@ -1,9 +1,10 @@
 use crate::checker::{WallCheckResult, WallChecker};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 pub struct WallProvider {
     checker: WallChecker,
     cache: HashMap<String, WallCheckResult>,
+    order: VecDeque<String>,
     pub hit_count: u64,
     pub check_count: u64,
     max_cache_size: usize,
@@ -14,6 +15,7 @@ impl WallProvider {
         WallProvider {
             checker,
             cache: HashMap::new(),
+            order: VecDeque::new(),
             hit_count: 0,
             check_count: 0,
             max_cache_size,
@@ -47,17 +49,15 @@ impl WallProvider {
 
     fn cache_insert(&mut self, sql: &str, result: WallCheckResult) {
         if self.cache.len() >= self.max_cache_size {
-            let keys: Vec<String> = self
-                .cache
-                .keys()
-                .take(self.max_cache_size / 2)
-                .cloned()
-                .collect();
-            for k in keys {
-                self.cache.remove(&k);
+            let evict_count = self.max_cache_size / 2;
+            for _ in 0..evict_count {
+                if let Some(old) = self.order.pop_front() {
+                    self.cache.remove(&old);
+                }
             }
         }
         self.cache.insert(sql.into(), result);
+        self.order.push_back(sql.to_string());
     }
 
     pub fn hit_rate(&self) -> f64 {
@@ -69,6 +69,7 @@ impl WallProvider {
     }
     pub fn clear_cache(&mut self) {
         self.cache.clear();
+        self.order.clear();
     }
     pub fn cache_size(&self) -> usize {
         self.cache.len()

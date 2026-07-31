@@ -5,6 +5,7 @@
 
 use druid_core::DruidError;
 use druid_filter::FilterChain;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 /// 代理连接 — 包装真实连接，Filter 回调自动触发
@@ -12,6 +13,7 @@ pub struct ProxyConnection {
     inner: Arc<dyn RawConnection>,
     filter_chain: Arc<FilterChain>,
     conn_id: u64,
+    closed: AtomicBool,
 }
 
 /// 代理 Statement
@@ -36,6 +38,7 @@ impl ProxyConnection {
             inner,
             filter_chain,
             conn_id: id,
+            closed: AtomicBool::new(false),
         }
     }
 
@@ -47,6 +50,9 @@ impl ProxyConnection {
     }
 
     pub fn close(&self) -> Result<(), DruidError> {
+        if self.closed.swap(true, Ordering::SeqCst) {
+            return Ok(());
+        }
         self.filter_chain.connection_closed(self.conn_id);
         self.inner.close()
     }
@@ -74,7 +80,9 @@ impl ProxyStatement {
 
 impl Drop for ProxyConnection {
     fn drop(&mut self) {
-        self.filter_chain.connection_closed(self.conn_id);
+        if !self.closed.load(Ordering::SeqCst) {
+            self.filter_chain.connection_closed(self.conn_id);
+        }
     }
 }
 

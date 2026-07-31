@@ -69,6 +69,20 @@ pub enum DenyOperation {
 }
 impl std::fmt::Display for DenyOperation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            DenyOperation::Select => write!(f, "SELECT"),
+            DenyOperation::Insert => write!(f, "INSERT"),
+            DenyOperation::Update => write!(f, "UPDATE"),
+            DenyOperation::Delete => write!(f, "DELETE"),
+            DenyOperation::Truncate => write!(f, "TRUNCATE"),
+            DenyOperation::DropTable => write!(f, "DROP TABLE"),
+            DenyOperation::AlterTable => write!(f, "ALTER TABLE"),
+            DenyOperation::CreateTable => write!(f, "CREATE TABLE"),
+            DenyOperation::CreateIndex => write!(f, "CREATE INDEX"),
+            DenyOperation::Grant => write!(f, "GRANT"),
+            DenyOperation::Revoke => write!(f, "REVOKE"),
+            DenyOperation::Call => write!(f, "CALL"),
+            DenyOperation::Execute => write!(f, "EXECUTE"),
+        }
     }
 }

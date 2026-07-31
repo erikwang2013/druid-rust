@@ -484,6 +484,7 @@ impl Parser {
             let op = match &self.current {
                 Token::Plus => BinaryOpType::Plus,
                 Token::Minus => BinaryOpType::Minus,
+                Token::Concat => BinaryOpType::Concat,
                 _ => break,
             };
             self.advance();
