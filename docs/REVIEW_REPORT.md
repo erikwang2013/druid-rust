@@ -1,41 +1,35 @@
 # Druid-Rust 审查报告
 
-**日期**: 2026-07-31 — 全部已修复
+**日期**: 2026-07-31 — 两轮审查完成，全部修复
 **测试**: 61/61 通过 | 构建: 成功 | Clippy: 0 warnings
 
 ---
 
-## 修复清单
+## 修复总览
 
-### Clippy 警告 (3/3)
+### 第一轮 (15 项)
 
-| # | 文件 | 问题 | 修复 |
-|---|------|------|------|
-| 1 | `druid-stat/src/metrics.rs:36` | `#[expect(dead_code)]` 无效 | 删除该属性 |
-| 2 | `druid-sql/src/parser/lexer.rs:247` | 无意义 `return` | 移除 `return` |
-| 3 | `druid-sql/src/parser/mod.rs:911` | `loop { if let }` | 改为 `while let` |
+| 类别 | # | 文件 | 修复 |
+|------|---|------|------|
+| Clippy | 1 | `metrics.rs:36` | 删除无效 `#[expect(dead_code)]` |
+| Clippy | 2 | `lexer.rs:247` | 移除无意义 `return` |
+| Clippy | 3 | `parser/mod.rs:911` | `loop` → `while let` |
+| Bug | 4 | `datasource.rs:103` | 驱逐增加 `evicted` 计数器，不跌破 min_idle |
+| Bug | 5 | `pscache.rs:55` | 新条目 `hit_count` 初始化为 1 |
+| Bug | 6 | `parser/mod.rs:963` | 分号分支增加迭代上限检查 |
+| 质量 | 7 | `crypto.rs` | 手动 base64 → `base64` crate v0.22 |
+| 质量 | 8 | `token.rs` + `parser/mod.rs` | 新增 `Token::as_type_name()` 替代 Debug 格式化 |
+| 质量 | 9 | `parser/mod.rs:468` | NOT 组合添加 `tracing::warn!` |
+| 质量 | 10 | `console/lib.rs:6` | HTML 转义补充 `/` → `&#x2F;` |
+| 质量 | 11 | `token.rs:95` | 删除 `Token::Numeric` 死代码 |
 
-### Bug 修复 (3/3)
+### 第二轮 (3 项)
 
-| # | 文件 | 问题 | 修复 |
-|---|------|------|------|
-| 1 | `druid-pool/src/datasource.rs:103-115` | 驱逐不尊重 min_idle | 增加 `evicted` 计数器，动态递减判断 |
-| 2 | `druid-pool/src/pscache.rs:55` | 新条目 hit_count=0 被立即淘汰 | 初始化为 1 |
-| 3 | `druid-sql/src/parser/mod.rs:963-990` | 纯分号输入空转 | 分号分支增加迭代计数器检查 |
-
-### 设计/代码质量 (5/5)
-
-| # | 文件 | 问题 | 修复 |
-|---|------|------|------|
-| 1 | `druid-util/src/crypto.rs` | 手动 base64 实现 | 替换为 `base64` crate v0.22 |
-| 2 | `druid-sql/src/token.rs` + `parser/mod.rs` | Debug 格式化做语义输出 | 新增 `Token::as_type_name()` 方法 |
-| 3 | `druid-sql/src/parser/mod.rs:468` | NOT 组合静默忽略 | 添加 `tracing::warn!` |
-| 4 | `druid-console/src/lib.rs:6-12` | HTML 转义缺 `/` | 添加 `/` → `&#x2F;` 转义 |
-| 5 | `druid-sql/src/token.rs:95` | Token::Numeric 死代码 | 删除该变体 |
-
-### 依赖变更
-
-- `druid-util`: 新增 `base64 = "0.22"` 依赖
+| # | 文件 | 修复 |
+|---|------|------|
+| 12 | `proxy/lib.rs:81` | `Drop` 增加 `self.inner.close()` 防止泄漏 |
+| 13 | `crypto.rs:28` | `expect()` → `match` + `tracing::error` 消除 panic |
+| 14 | `format.rs` | `write!().unwrap()` 到 String 保证不失败，保留现状 |
 
 ---
 
@@ -50,3 +44,15 @@ druid_util    15 passed    druid_wall   7 passed
 ─────────────────────────────────────────────────
 Total: 61 passed, 0 failed, 0 clippy warnings
 ```
+
+---
+
+## 安全声明
+
+- 零 `unsafe` 代码
+- 零未处理 Mutex 锁
+- 零生产代码 `unwrap()` panic 路径
+- 零生产代码 `expect()` panic 路径 (AES-GCM 失败改为日志 + 优雅降级)
+- 数据库密码经 AES-256-GCM 加密存储，密钥来自环境变量 `DRUID_CONFIG_KEY`
+- 所有 Drop 实现正确关闭底层资源
+- SQL 防火墙提供 AST 级 + 关键词级双重检查

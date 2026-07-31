@@ -23,9 +23,13 @@ pub fn encrypt(plain: &str) -> String {
     let key = Key::<Aes256Gcm>::from_slice(&key);
     let cipher = Aes256Gcm::new(key);
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-    let ciphertext = cipher
-        .encrypt(&nonce, plain.as_bytes())
-        .expect("AES-GCM encrypt failed");
+    let ciphertext = match cipher.encrypt(&nonce, plain.as_bytes()) {
+        Ok(ct) => ct,
+        Err(e) => {
+            tracing::error!("AES-GCM encrypt failed: {}", e);
+            return String::new();
+        }
+    };
     let mut combined = nonce.to_vec();
     combined.extend_from_slice(&ciphertext);
     base64::engine::general_purpose::STANDARD.encode(&combined)

@@ -82,6 +82,7 @@ impl Drop for ProxyConnection {
     fn drop(&mut self) {
         if !self.closed.load(Ordering::SeqCst) {
             self.filter_chain.connection_closed(self.conn_id);
+            let _ = self.inner.close();
         }
     }
 }
