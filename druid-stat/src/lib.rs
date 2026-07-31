@@ -156,9 +156,11 @@ impl Filter for StatFilter {
     fn statement_execute_after(&self, ctx: &FilterContext, elapsed_ms: u64, rows: u64) {
         let sql = ctx.sql.as_deref().unwrap_or("UNKNOWN");
         let mut stats = self.sql_stats.lock().expect("stat lock poisoned");
-        let entry = stats
-            .entry(sql.to_string())
-            .or_insert_with(|| SqlStat::new(sql));
+        let entry = if let Some(e) = stats.get_mut(sql) {
+            e
+        } else {
+            stats.entry(sql.to_string()).or_insert_with(|| SqlStat::new(sql))
+        };
         entry.execute_count += 1;
         entry.total_time_ms += elapsed_ms;
         entry.max_time_ms = entry.max_time_ms.max(elapsed_ms);

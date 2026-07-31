@@ -1,24 +1,49 @@
-/// 简单密码混淆/解混淆（兼容 Druid 的 ConfigTools）
-/// 注意：这不是安全加密，仅用于配置文件中的密码不可见存储
-const KEY: &[u8] = b"druid-rust-crypto-key-2026";
+use aes_gcm::aead::{Aead, OsRng};
+use aes_gcm::{AeadCore, Aes256Gcm, Key, KeyInit, Nonce};
+use zeroize::Zeroizing;
+
+fn get_key() -> Zeroizing<Vec<u8>> {
+    static KEY: std::sync::OnceLock<Zeroizing<Vec<u8>>> = std::sync::OnceLock::new();
+    KEY.get_or_init(|| {
+        if let Ok(env_key) = std::env::var("DRUID_CONFIG_KEY") {
+            let mut key = env_key.into_bytes();
+            key.resize(32, 0);
+            Zeroizing::new(key)
+        } else {
+            tracing::warn!("DRUID_CONFIG_KEY not set, using random per-process key (passwords cannot be shared across processes)");
+            Zeroizing::new(Aes256Gcm::generate_key(OsRng).to_vec())
+        }
+    })
+    .clone()
+}
 
 pub fn encrypt(plain: &str) -> String {
-    let bytes: Vec<u8> = plain
-        .bytes()
-        .enumerate()
-        .map(|(i, b)| b ^ KEY[i % KEY.len()])
-        .collect();
-    base64_encode(&bytes)
+    let key = get_key();
+    let key = Key::<Aes256Gcm>::from_slice(&key);
+    let cipher = Aes256Gcm::new(key);
+    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let ciphertext = cipher
+        .encrypt(&nonce, plain.as_bytes())
+        .expect("AES-GCM encrypt failed");
+    let mut combined = nonce.to_vec();
+    combined.extend_from_slice(&ciphertext);
+    base64_encode(&combined)
 }
 
 pub fn decrypt(encrypted: &str) -> Option<String> {
-    let bytes = base64_decode(encrypted)?;
-    let decrypted: Vec<u8> = bytes
-        .iter()
-        .enumerate()
-        .map(|(i, b)| b ^ KEY[i % KEY.len()])
-        .collect();
-    String::from_utf8(decrypted).ok()
+    let key = get_key();
+    let key = Key::<Aes256Gcm>::from_slice(&key);
+    let cipher = Aes256Gcm::new(key);
+    let combined = base64_decode(encrypted)?;
+    if combined.len() < 12 {
+        return None;
+    }
+    let nonce = Nonce::from_slice(&combined[..12]);
+    let ciphertext = &combined[12..];
+    cipher
+        .decrypt(nonce, ciphertext)
+        .ok()
+        .and_then(|v| String::from_utf8(v).ok())
 }
 
 fn base64_encode(data: &[u8]) -> String {
@@ -50,7 +75,6 @@ fn base64_decode(s: &str) -> Option<Vec<u8>> {
     let mut result = Vec::new();
     let mut buffer: u32 = 0;
     let mut bits = 0;
-
     for c in s.chars() {
         let val = match c {
             'A'..='Z' => c as u32 - 'A' as u32,

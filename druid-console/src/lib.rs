@@ -3,7 +3,6 @@ use std::sync::Arc;
 use axum::{extract::State, routing::get, Json, Router};
 use druid_stat::StatFilter;
 
-/// HTML 实体转义
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -12,25 +11,30 @@ fn html_escape(s: &str) -> String {
         .replace('\'', "&#x27;")
 }
 
-/// 应用状态
+fn json_or_error<T: serde::Serialize>(value: &T) -> Json<serde_json::Value> {
+    Json(serde_json::to_value(value).unwrap_or(serde_json::Value::Null))
+}
+
+#[derive(Clone)]
 struct AppState {
     stat_filter: Arc<StatFilter>,
 }
 
-/// 启动 Druid 监控控制台 HTTP 服务
-pub async fn start_server(
-    stat_filter: Arc<StatFilter>,
-    addr: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn make_router(stat_filter: Arc<StatFilter>) -> Router {
     let state = Arc::new(AppState { stat_filter });
-
-    let app = Router::new()
+    Router::new()
         .route("/druid/stat.json", get(stat_json))
         .route("/druid/sql.json", get(sql_json))
         .route("/druid/slow-sql.json", get(slow_sql_json))
         .route("/druid/index.html", get(index_page))
-        .with_state(state);
+        .with_state(state)
+}
 
+pub async fn start_server(
+    stat_filter: Arc<StatFilter>,
+    addr: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let app = make_router(stat_filter);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("Druid console listening on http://{}", addr);
     axum::serve(listener, app).await?;
@@ -39,21 +43,19 @@ pub async fn start_server(
 
 async fn stat_json(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let stat = state.stat_filter.get_datasource_stat();
-    Json(serde_json::to_value(stat).unwrap())
+    json_or_error(&stat)
 }
 
 async fn sql_json(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let stats = state.stat_filter.get_sql_stats();
-    Json(serde_json::to_value(stats).unwrap())
+    json_or_error(&stats)
 }
 
 async fn slow_sql_json(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
     let stats = state.stat_filter.get_slow_sql();
-    Json(serde_json::to_value(stats).unwrap())
+    json_or_error(&stats)
 }
 
-// NOTE: HTML template embedded in Rust string for zero-dependency deployment.
-// For larger pages, consider a template engine like askama.
 async fn index_page(State(state): State<Arc<AppState>>) -> axum::response::Html<String> {
     let stat = state.stat_filter.get_datasource_stat();
     let sql_stats = state.stat_filter.get_sql_stats();
@@ -68,7 +70,7 @@ async fn index_page(State(state): State<Arc<AppState>>) -> axum::response::Html<
             s.total_time_ms,
             s.max_time_ms,
             s.error_count,
-            s.last_execute_time.as_deref().unwrap_or("-")
+            html_escape(s.last_execute_time.as_deref().unwrap_or("-"))
         ));
     }
 
@@ -86,18 +88,18 @@ th{{background:#fafafa;font-weight:bold}}</style></head>
 <body>
 <h1>Druid Monitor — {name}</h1>
 <div class="stat">
-<div class="card"><div class="val">{active}</div><div class="label">活跃连接</div></div>
-<div class="card"><div class="val">{idle}</div><div class="label">空闲连接</div></div>
-<div class="card"><div class="val">{borrow}</div><div class="label">借用次数</div></div>
-<div class="card"><div class="val">{exec}</div><div class="label">SQL 执行</div></div>
-<div class="card"><div class="val">{err}</div><div class="label">错误数</div></div>
-<div class="card"><div class="val">{slow_count}</div><div class="label">慢SQL</div></div>
+<div class="card"><div class="val">{active}</div><div class="label">Active</div></div>
+<div class="card"><div class="val">{idle}</div><div class="label">Idle</div></div>
+<div class="card"><div class="val">{borrow}</div><div class="label">Borrows</div></div>
+<div class="card"><div class="val">{exec}</div><div class="label">SQL Exec</div></div>
+<div class="card"><div class="val">{err}</div><div class="label">Errors</div></div>
+<div class="card"><div class="val">{slow_count}</div><div class="label">Slow SQL</div></div>
 </div>
-<h2>SQL 统计 (Top 20)</h2>
-<table><tr><th>SQL</th><th>执行次数</th><th>总耗时</th><th>最大</th><th>错误</th><th>最后执行</th></tr>
+<h2>SQL Stats (Top 20)</h2>
+<table><tr><th>SQL</th><th>Exec Count</th><th>Total</th><th>Max</th><th>Errors</th><th>Last Run</th></tr>
 {rows}</table>
 </body></html>"#,
-        name = stat.name,
+        name = html_escape(&stat.name),
         active = stat.active_count,
         idle = stat.idle_count,
         borrow = stat.borrow_count,
@@ -121,14 +123,7 @@ mod tests {
     use tower::ServiceExt;
 
     fn test_app() -> Router {
-        let stat_filter = Arc::new(StatFilter::new("test-ds", 1000));
-        let state = Arc::new(AppState { stat_filter });
-        Router::new()
-            .route("/druid/stat.json", get(stat_json))
-            .route("/druid/sql.json", get(sql_json))
-            .route("/druid/slow-sql.json", get(slow_sql_json))
-            .route("/druid/index.html", get(index_page))
-            .with_state(state)
+        make_router(Arc::new(StatFilter::new("test-ds", 1000)))
     }
 
     #[tokio::test]
@@ -173,7 +168,7 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(resp.into_body(), 10240).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 102400).await.unwrap();
         let html = String::from_utf8_lossy(&body);
         assert!(html.contains("Druid Monitor"));
         assert!(html.contains("<!DOCTYPE html>"));

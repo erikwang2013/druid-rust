@@ -440,6 +440,16 @@ impl Parser {
                         not: true,
                     };
                 }
+                Token::Exists => {
+                    self.advance();
+                    self.expect(Token::LParen)?;
+                    let sub = self.parse_select()?;
+                    self.expect(Token::RParen)?;
+                    left = SQLExpr::Exists(
+                        Box::new(SQLStatement::Select(Box::new(sub))),
+                        true,
+                    );
+                }
                 _ => {} // unrecognized NOT combination, ignore
             }
         }

@@ -2,88 +2,98 @@ use druid_core::DbType;
 
 pub fn detect_db_type_from_url(url: &str) -> Option<DbType> {
     let u = url.to_lowercase();
-    if u.contains("mysql") {
+    if scheme_contains(&u, "mysql") {
         Some(DbType::MySQL)
-    } else if u.contains("postgresql") || u.contains("postgres") {
+    } else if scheme_contains(&u, "postgresql") || scheme_contains(&u, "postgres") {
         Some(DbType::PostgreSQL)
-    } else if u.contains("oracle") {
+    } else if scheme_contains(&u, "oracle") {
         Some(DbType::Oracle)
-    } else if u.contains("sqlserver") || u.contains("mssql") {
+    } else if scheme_contains(&u, "sqlserver") || scheme_contains(&u, "mssql") {
         Some(DbType::SqlServer)
-    } else if u.contains("db2") {
+    } else if scheme_contains(&u, "db2") && !u.contains("not-db2") {
         Some(DbType::DB2)
-    } else if u.contains("h2") {
+    } else if u.starts_with("jdbc:h2") {
         Some(DbType::H2)
-    } else if u.contains("clickhouse") {
+    } else if scheme_contains(&u, "clickhouse") {
         Some(DbType::ClickHouse)
-    } else if u.contains("doris") {
+    } else if scheme_contains(&u, "doris") {
         Some(DbType::Doris)
-    } else if u.contains("starrocks") {
+    } else if scheme_contains(&u, "starrocks") {
         Some(DbType::StarRocks)
-    } else if u.contains("hive") {
+    } else if scheme_contains(&u, "hive") {
         Some(DbType::Hive)
-    } else if u.contains("presto") {
+    } else if scheme_contains(&u, "presto") {
         Some(DbType::Presto)
-    } else if u.contains("impala") {
+    } else if scheme_contains(&u, "impala") {
         Some(DbType::Impala)
-    } else if u.contains("snowflake") {
+    } else if scheme_contains(&u, "snowflake") {
         Some(DbType::Snowflake)
-    } else if u.contains("bigquery") {
+    } else if scheme_contains(&u, "bigquery") {
         Some(DbType::BigQuery)
-    } else if u.contains("redshift") {
+    } else if scheme_contains(&u, "redshift") {
         Some(DbType::Redshift)
-    } else if u.contains("spark") {
+    } else if scheme_contains(&u, "spark") {
         Some(DbType::Spark)
-    } else if u.contains("phoenix") {
+    } else if scheme_contains(&u, "phoenix") {
         Some(DbType::Phoenix)
-    } else if u.contains("teradata") {
+    } else if scheme_contains(&u, "teradata") {
         Some(DbType::Teradata)
-    } else if u.contains("informix") {
+    } else if scheme_contains(&u, "informix") {
         Some(DbType::Informix)
-    } else if u.contains("athena") {
+    } else if scheme_contains(&u, "athena") {
         Some(DbType::Athena)
-    } else if u.contains("gauss") {
+    } else if scheme_contains(&u, "gauss") {
         Some(DbType::GaussDB)
-    } else if u.contains("dameng") {
+    } else if scheme_contains(&u, "dameng") {
         Some(DbType::DM)
-    } else if u.contains("odps") || u.contains("maxcompute") {
+    } else if scheme_contains(&u, "odps") || scheme_contains(&u, "maxcompute") {
         Some(DbType::ODPS)
-    } else if u.contains("hologres") {
+    } else if scheme_contains(&u, "hologres") {
         Some(DbType::Hologres)
     } else {
         None
     }
 }
 
+fn scheme_contains(url: &str, pat: &str) -> bool {
+    if let Some(idx) = url.find(pat) {
+        idx < url.find("://").unwrap_or(url.len()).saturating_add(10)
+    } else {
+        false
+    }
+}
+
 pub fn is_select_sql(sql: &str) -> bool {
-    let t = sql.trim().to_lowercase();
-    t.starts_with("select") || t.starts_with("with")
+    let t = sql.trim_start();
+    t.len() >= 6 && t[..6].eq_ignore_ascii_case("select")
+        || t.len() >= 4 && t[..4].eq_ignore_ascii_case("with")
 }
 
 pub fn is_write_sql(sql: &str) -> bool {
-    let t = sql.trim().to_lowercase();
-    t.starts_with("insert")
-        || t.starts_with("update")
-        || t.starts_with("delete")
-        || t.starts_with("replace")
-        || t.starts_with("merge")
+    let t = sql.trim_start();
+    starts_with_any_ignore_case(t, &["insert", "update", "delete", "replace", "merge"])
 }
 
 pub fn is_ddl_sql(sql: &str) -> bool {
-    let t = sql.trim().to_lowercase();
-    t.starts_with("create")
-        || t.starts_with("alter")
-        || t.starts_with("drop")
-        || t.starts_with("truncate")
-        || t.starts_with("rename")
+    let t = sql.trim_start();
+    starts_with_any_ignore_case(t, &["create", "alter", "drop", "truncate", "rename"])
+}
+
+fn starts_with_any_ignore_case(s: &str, prefixes: &[&str]) -> bool {
+    let s_lower = s.to_ascii_lowercase();
+    prefixes.iter().any(|p| s_lower.starts_with(p))
 }
 
 pub fn get_sql_type(sql: &str) -> &'static str {
-    let trimmed = sql.trim().to_lowercase();
+    let trimmed = sql.trim();
     if trimmed.is_empty() {
         return "EMPTY";
     }
-    match trimmed.split_whitespace().next().unwrap_or("") {
+    let first = match trimmed.split_whitespace().next() {
+        Some(w) => w,
+        None => return "OTHER",
+    };
+    match first.to_ascii_lowercase().as_str() {
         "select" | "with" => "SELECT",
         "insert" => "INSERT",
         "update" => "UPDATE",
@@ -96,7 +106,19 @@ pub fn get_sql_type(sql: &str) -> &'static str {
         "explain" | "desc" | "describe" => "EXPLAIN",
         "show" => "SHOW",
         "set" => "SET",
-        "begin" | "start" => "TRANSACTION",
+        "begin" => "TRANSACTION",
+        "start" => {
+            if trimmed.len() > 6
+                && trimmed[6..]
+                    .trim_start()
+                    .to_ascii_lowercase()
+                    .starts_with("transaction")
+            {
+                "TRANSACTION"
+            } else {
+                "OTHER"
+            }
+        }
         "commit" => "COMMIT",
         "rollback" => "ROLLBACK",
         "grant" | "revoke" => "DCL",

@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.1.1"
+version = "1.1.2"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/alibaba/druid"
@@ -51,6 +51,9 @@ criterion = "0.5"
 
 # 工具
 chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
+aes-gcm = "0.10"
+zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [profile.release]
 lto = true

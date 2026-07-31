@@ -150,6 +150,9 @@ impl<D: Driver> DruidDataSource<D> {
     }
 
     pub async fn get_connection(&self) -> Result<PoolGuard<D::Connection>, DruidError> {
+        if self.inner.lock().unwrap().closed {
+            return Err(DruidError::Pool("datasource is closed".into()));
+        }
         let start = Instant::now();
 
         let permit = if let Some(max_wait) = self.config.max_wait() {
@@ -202,17 +205,14 @@ impl<D: Driver> DruidDataSource<D> {
 
         if self.config.test_on_borrow {
             if let Err(e) = self.driver.validate(&conn).await {
-                // rollback: undo state mutations that were done before validation
                 let mut g = self.inner.lock().unwrap();
                 g.active_count = g.active_count.saturating_sub(1);
                 self.metrics.set_active(g.active_count);
                 if from_idle {
-                    g.idle.push_back(PoolEntry {
-                        conn,
-                        last_used_at: Instant::now(),
-                        id: conn_id,
-                    });
                     self.metrics.set_idle(g.idle.len());
+                    self.filter_chain.connection_closed(conn_id);
+                    let c = conn.clone();
+                    tokio::spawn(async move { let _ = c.close().await; });
                 } else {
                     self.filter_chain.connection_closed(conn_id);
                 }
