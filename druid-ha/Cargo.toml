@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "High-availability data source for Druid-Rust — weighted round-robin, health checks"
+keywords = ["druid", "high-availability", "load-balancing"]
+categories = ["database"]
 [dependencies]
 druid-core = { path = "../druid-core" }
 druid-pool = { path = "../druid-pool" }

@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "Web monitoring console for Druid-Rust — axum-based HTTP stats dashboard"
+keywords = ["druid", "monitoring", "web", "dashboard"]
+categories = ["web-programming"]
 
 [dependencies]
 druid-core = { path = "../druid-core" }

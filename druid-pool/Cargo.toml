@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "Async connection pool for Druid-Rust — semaphore-based, eviction, KeepAlive, PSCache"
+keywords = ["druid", "connection-pool", "database", "async"]
+categories = ["database"]
 
 [dependencies]
 druid-core = { path = "../druid-core" }

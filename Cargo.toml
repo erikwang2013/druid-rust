@@ -16,10 +16,10 @@ members = [
 ]
 
 [workspace.package]
-version = "1.1.8"
+version = "1.1.9"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/alibaba/druid"
+repository = "https://github.com/alibaba/druid-rust"
 authors = ["erik"]
 
 [workspace.dependencies]
@@ -27,7 +27,6 @@ authors = ["erik"]
 tokio = { version = "1", features = ["full"] }
 
 # 数据库驱动
-sqlx = { version = "0.8", features = ["runtime-tokio"] }
 
 # HTTP 框架
 axum = "0.7"
@@ -44,14 +43,12 @@ thiserror = "2"
 
 # 日志/追踪
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 
 # 测试
 criterion = "0.5"
 
 # 工具
 chrono = { version = "0.4", features = ["serde"] }
-rand = "0.8"
 aes-gcm = "0.10"
 zeroize = { version = "1", features = ["zeroize_derive"] }
 

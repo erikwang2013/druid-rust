@@ -396,4 +396,25 @@ Apache 2.0 — same as [Alibaba Druid](https://github.com/alibaba/druid).
 
 ---
 
+## Support
+
+Thank you for using Druid-Rust! If this project helps you, feel free to buy the developer a coffee ☕
+
+<p align="center">
+  <table align="center">
+    <tr>
+      <td align="center" width="200">
+        <img src="alipay.png" width="130" height="130" alt="Alipay"><br>
+        <b>Alipay</b>
+      </td>
+      <td align="center" width="200">
+        <img src="weixinpay.png" width="130" height="130" alt="WeChat Pay"><br>
+        <b>WeChat Pay</b>
+      </td>
+    </tr>
+  </table>
+</p>
+
+---
+
 [中文文档](../README.md)

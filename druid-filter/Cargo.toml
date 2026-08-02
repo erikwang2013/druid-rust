@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "Filter chain architecture for Druid-Rust — pluggable lifecycle hooks"
+keywords = ["druid", "filter", "chain-of-responsibility"]
+categories = ["development-tools"]
 
 [dependencies]
 druid-core = { path = "../druid-core" }

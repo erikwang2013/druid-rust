@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "Database proxy layer for Druid-Rust — Filter-aware connection/statement wrappers"
+keywords = ["druid", "proxy", "database"]
+categories = ["database"]
 [dependencies]
 druid-core = { path = "../druid-core" }
 druid-filter = { path = "../druid-filter" }

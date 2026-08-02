@@ -5,12 +5,14 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "Utility library for Druid-Rust — SQL detection, string helpers, crypto, time"
+keywords = ["druid", "sql", "utility", "crypto"]
+categories = ["development-tools"]
 
 [dependencies]
 druid-core = { path = "../druid-core" }
 chrono.workspace = true
 serde.workspace = true
-rand.workspace = true
 aes-gcm.workspace = true
 zeroize.workspace = true
 tracing.workspace = true

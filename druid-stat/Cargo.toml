@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "SQL monitoring and statistics for Druid-Rust — slow SQL detection, PoolMetrics"
+keywords = ["druid", "monitoring", "metrics", "sql"]
+categories = ["development-tools"]
 
 [dependencies]
 druid-core = { path = "../druid-core" }
