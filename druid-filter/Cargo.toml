@@ -9,4 +9,3 @@ authors.workspace = true
 [dependencies]
 druid-core = { path = "../druid-core" }
 tracing.workspace = true
-serde.workspace = true

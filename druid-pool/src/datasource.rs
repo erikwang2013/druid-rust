@@ -127,6 +127,7 @@ impl<D: Driver> DruidDataSource<D> {
                         }
                     });
                     for e in &to_evict {
+                        metrics.inc_destroy();
                         fchain.connection_closed(e.id);
                     }
                     metrics.set_idle(g.idle.len());
@@ -254,6 +255,7 @@ impl<D: Driver> DruidDataSource<D> {
                 None => {
                     // 过期连接需异步关闭
                     if let Some(e) = idle_entry {
+                        self.metrics.inc_destroy();
                         self.filter_chain.connection_closed(e.id);
                         let c = e.conn.clone();
                         tokio::spawn(async move {
@@ -282,6 +284,7 @@ impl<D: Driver> DruidDataSource<D> {
                         }
                     };
                     let c = Arc::new(c);
+                    self.metrics.inc_create();
                     self.filter_chain.connection_created(id);
                     (id, c, false)
                 }
@@ -300,17 +303,22 @@ impl<D: Driver> DruidDataSource<D> {
                 self.metrics.set_active(g.active_count);
                 if from_idle {
                     self.metrics.set_idle(g.idle.len());
+                    self.metrics.inc_destroy();
                     self.filter_chain.connection_closed(conn_id);
                     let c = conn.clone();
                     tokio::spawn(async move {
                         let _ = c.close().await;
                     });
                 } else {
+                    self.metrics.inc_destroy();
                     self.filter_chain.connection_closed(conn_id);
                 }
+                self.metrics.dec_waiting();
                 return Err(e);
             }
         }
+
+        self.metrics.dec_waiting();
 
         Ok(PoolGuard {
             conn,
@@ -429,7 +437,6 @@ impl<D: Driver> PoolGuard<D> {
 
 impl<D: Driver> Drop for PoolGuard<D> {
     fn drop(&mut self) {
-        self.metrics.dec_waiting();
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         g.active_count = g.active_count.saturating_sub(1);
         self.metrics.set_active(g.active_count);
@@ -449,6 +456,7 @@ impl<D: Driver> Drop for PoolGuard<D> {
                                 conn_id
                             );
                             fc.connection_closed(conn_id);
+                            m.inc_destroy();
                             let _ = conn.close().await;
                         } else {
                             let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());

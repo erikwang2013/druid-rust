@@ -152,8 +152,10 @@ impl Filter for StatFilter {
     fn connection_closed(&self, _ctx: &FilterContext) {
         let mut stat = self.ds_stat.lock().expect("stat lock poisoned");
         stat.destroy_count += 1;
-        // active/idle 由 PoolMetrics 原子计数器精确追踪，
-        // 此处不重复维护（关闭的连接可能来自 active 或 idle 状态）
+        // 大多数 close 发生在 idle 连接上（驱逐/keepalive/过期），仅递减 idle_count。
+        // 少数 active 连接关闭时 idle_count 多减一次，但有 saturating_sub 防 underflow。
+        // 精确 active/idle 计数参见 PoolMetrics。
+        stat.idle_count = stat.idle_count.saturating_sub(1);
     }
 
     fn statement_execute_before(&self, _ctx: &FilterContext) -> Result<(), DruidError> {

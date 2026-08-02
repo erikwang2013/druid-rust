@@ -962,7 +962,10 @@ impl Parser {
                 self.advance();
                 DropObjectType::Index
             }
-            _ => DropObjectType::Table,
+            _ => {
+                self.advance();
+                DropObjectType::Table
+            }
         };
         let if_exists = if self.current == Token::If {
             self.advance();

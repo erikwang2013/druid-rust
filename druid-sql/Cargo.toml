@@ -8,8 +8,6 @@ authors.workspace = true
 
 [dependencies]
 druid-core = { path = "../druid-core" }
-serde.workspace = true
-thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

@@ -193,13 +193,48 @@ impl WallChecker {
                             }
                         }
                     }
-                    if let Some(ref w) = s.where_clause {
-                        if let Some(r) = visit(w, deny) {
+                    if let Some(druid_sql::ast::TableReference::SubQuery(stmt, _)) = &s.from {
+                        if let Some(r) = visit_stmt(stmt, deny) {
                             return Some(r);
                         }
                     }
                     for join in &s.joins {
                         if let Some(r) = visit(&join.on, deny) {
+                            return Some(r);
+                        }
+                        if let druid_sql::ast::TableReference::SubQuery(stmt, _) = &join.table {
+                            if let Some(r) = visit_stmt(stmt, deny) {
+                                return Some(r);
+                            }
+                        }
+                    }
+                    if let Some(ref w) = s.where_clause {
+                        if let Some(r) = visit(w, deny) {
+                            return Some(r);
+                        }
+                    }
+                    for e in &s.group_by {
+                        if let Some(r) = visit(e, deny) {
+                            return Some(r);
+                        }
+                    }
+                    if let Some(ref h) = s.having {
+                        if let Some(r) = visit(h, deny) {
+                            return Some(r);
+                        }
+                    }
+                    for o in &s.order_by {
+                        if let Some(r) = visit(&o.expr, deny) {
+                            return Some(r);
+                        }
+                    }
+                    if let Some(ref l) = s.limit {
+                        if let Some(r) = visit(l, deny) {
+                            return Some(r);
+                        }
+                    }
+                    if let Some(ref off) = s.offset {
+                        if let Some(r) = visit(off, deny) {
                             return Some(r);
                         }
                     }
