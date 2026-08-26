@@ -312,6 +312,10 @@ impl<D: Driver> DruidDataSource<D> {
                 } else {
                     self.metrics.inc_destroy();
                     self.filter_chain.connection_closed(conn_id);
+                    let c = conn.clone();
+                    tokio::spawn(async move {
+                        let _ = c.close().await;
+                    });
                 }
                 self.metrics.dec_waiting();
                 return Err(e);
@@ -498,5 +502,271 @@ impl<D: Driver> Drop for PoolGuard<D> {
             }
         }
         // permit auto-released
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use druid_core::DruidConfig;
+    use std::time::Duration;
+
+    #[derive(Debug, Clone)]
+    struct MockConn {
+        id: u64,
+        closed: Arc<AtomicBool>,
+        driver_closed: Arc<AtomicU64>,
+    }
+
+    #[async_trait::async_trait]
+    impl Connection for MockConn {
+        async fn execute(&self, _: &str) -> Result<u64, DruidError> {
+            Ok(1)
+        }
+        async fn query(&self, _: &str) -> Result<Vec<Vec<String>>, DruidError> {
+            Ok(vec![])
+        }
+        async fn close(&self) -> Result<(), DruidError> {
+            self.closed.store(true, Ordering::SeqCst);
+            self.driver_closed.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn ping(&self) -> Result<(), DruidError> {
+            Ok(())
+        }
+        fn connection_id(&self) -> u64 {
+            self.id
+        }
+    }
+
+    #[derive(Debug)]
+    struct MockDriver {
+        connect_count: AtomicU64,
+        closed: Arc<AtomicU64>,
+        validate_ok: AtomicBool,
+    }
+
+    impl MockDriver {
+        fn new(validate_ok: bool, closed: Arc<AtomicU64>) -> Self {
+            MockDriver {
+                connect_count: AtomicU64::new(0),
+                closed,
+                validate_ok: AtomicBool::new(validate_ok),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Driver for MockDriver {
+        type Connection = MockConn;
+        async fn connect(
+            &self,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: Option<Duration>,
+        ) -> Result<MockConn, DruidError> {
+            let id = self.connect_count.fetch_add(1, Ordering::SeqCst) + 1;
+            Ok(MockConn {
+                id,
+                closed: Arc::new(AtomicBool::new(false)),
+                driver_closed: self.closed.clone(),
+            })
+        }
+        fn name(&self) -> &'static str {
+            "MockDriver"
+        }
+        async fn validate(&self, _: &MockConn) -> Result<(), DruidError> {
+            if self.validate_ok.load(Ordering::SeqCst) {
+                Ok(())
+            } else {
+                Err(DruidError::Pool("invalid".into()))
+            }
+        }
+    }
+
+    /// 基础配置：禁用后台驱逐/保活循环，borrow 不做校验
+    fn cfg(url: &str) -> DruidConfig {
+        let mut c = DruidConfig::new(url, "u", "p");
+        c.time_between_eviction_runs_ms = 0;
+        c.test_on_borrow = false;
+        c
+    }
+
+    #[tokio::test]
+    async fn test_init_twice_fails() {
+        let ds = DruidDataSource::new(MockDriver::new(true, Arc::new(AtomicU64::new(0))), cfg("mock://a"));
+        assert!(ds.init().await.is_ok());
+        let err = ds.init().await.unwrap_err();
+        assert!(err.to_string().contains("already initialized"));
+    }
+
+    #[tokio::test]
+    async fn test_get_connection_before_init_fails() {
+        let ds = DruidDataSource::new(MockDriver::new(true, Arc::new(AtomicU64::new(0))), cfg("mock://a"));
+        let err = ds.get_connection().await.err().unwrap();
+        assert!(err.to_string().contains("not initialized"));
+    }
+
+    #[tokio::test]
+    async fn test_borrow_return_cycle_and_metrics() {
+        let driver = MockDriver::new(true, Arc::new(AtomicU64::new(0)));
+        let ds = DruidDataSource::new(driver, cfg("mock://a"));
+        ds.init().await.unwrap();
+
+        let g1 = ds.get_connection().await.unwrap();
+        assert_eq!(ds.active_count(), 1);
+        assert_eq!(ds.idle_count(), 0);
+        drop(g1);
+        assert_eq!(ds.active_count(), 0);
+        assert_eq!(ds.idle_count(), 1);
+
+        // 第二次借用命中空闲池：不新建连接
+        let g2 = ds.get_connection().await.unwrap();
+        assert_eq!(ds.metrics().create_count(), 1);
+        assert_eq!(ds.metrics().borrow_count(), 2);
+        assert_eq!(ds.metrics().cache_hit_count(), 1);
+        drop(g2);
+        assert_eq!(ds.active_count(), 0);
+        assert_eq!(ds.idle_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_max_lifetime_expiry_on_borrow() {
+        let driver = MockDriver::new(true, Arc::new(AtomicU64::new(0)));
+        let mut c = cfg("mock://a");
+        c.initial_size = 1;
+        c.max_lifetime_ms = 20;
+        let ds = DruidDataSource::new(driver, c);
+        ds.init().await.unwrap();
+        assert_eq!(ds.idle_count(), 1);
+
+        // 空闲超过 max_lifetime 后借用 → 过期连接被销毁并新建
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        let g = ds.get_connection().await.unwrap();
+        assert_eq!(ds.metrics().create_count(), 2);
+        assert_eq!(ds.metrics().destroy_count(), 1);
+        assert_eq!(ds.metrics().cache_hit_count(), 0);
+        drop(g);
+    }
+
+    #[tokio::test]
+    async fn test_test_on_borrow_failure_closes_connection() {
+        let closed = Arc::new(AtomicU64::new(0));
+        let driver = MockDriver::new(false, closed.clone());
+        let mut c = cfg("mock://a");
+        c.test_on_borrow = true; // 本测试需要借用校验
+        let ds = DruidDataSource::new(driver, c);
+        ds.init().await.unwrap();
+
+        assert!(ds.get_connection().await.is_err());
+        assert_eq!(ds.active_count(), 0);
+        assert_eq!(ds.metrics().destroy_count(), 1);
+        // 新建连接校验失败也必须被 close（修复验证）
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(closed.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_test_on_return_failure_destroys_connection() {
+        let closed = Arc::new(AtomicU64::new(0));
+        let driver = MockDriver::new(false, closed.clone());
+        let mut c = cfg("mock://a");
+        c.initial_size = 1;
+        c.test_on_return = true;
+        let ds = DruidDataSource::new(driver, c);
+        ds.init().await.unwrap();
+
+        let g = ds.get_connection().await.unwrap();
+        drop(g); // 归还校验失败 → 连接被销毁而不是回到空闲池
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(ds.idle_count(), 0);
+        assert_eq!(ds.active_count(), 0);
+        assert_eq!(ds.metrics().destroy_count(), 1);
+        assert_eq!(closed.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_close_closes_idle_connections_and_rejects_borrows() {
+        let closed = Arc::new(AtomicU64::new(0));
+        let driver = MockDriver::new(true, closed.clone());
+        let mut c = cfg("mock://a");
+        c.initial_size = 2;
+        let ds = DruidDataSource::new(driver, c);
+        ds.init().await.unwrap();
+
+        ds.close().await.unwrap();
+        assert_eq!(ds.idle_count(), 0);
+        assert_eq!(closed.load(Ordering::SeqCst), 2); // 空闲连接同步关闭
+
+        let err = ds.get_connection().await.err().unwrap();
+        assert!(err.to_string().contains("closed"));
+    }
+
+    #[tokio::test]
+    async fn test_guard_dropped_after_close_closes_connection() {
+        let closed = Arc::new(AtomicU64::new(0));
+        let driver = MockDriver::new(true, closed.clone());
+        let mut c = cfg("mock://a");
+        c.initial_size = 1;
+        let ds = DruidDataSource::new(driver, c);
+        ds.init().await.unwrap();
+
+        let g = ds.get_connection().await.unwrap();
+        ds.close().await.unwrap();
+        drop(g); // close 之后归还 → 连接被关闭而非回池
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(ds.idle_count(), 0);
+        assert_eq!(closed.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_eviction_loop_evicts_idle_connections() {
+        let closed = Arc::new(AtomicU64::new(0));
+        let driver = MockDriver::new(true, closed.clone());
+        let mut c = cfg("mock://a");
+        c.initial_size = 2;
+        c.time_between_eviction_runs_ms = 20;
+        c.max_evictable_idle_time_ms = 1;
+        c.min_idle = 0;
+        let ds = DruidDataSource::new(driver, c);
+        ds.init().await.unwrap();
+        assert_eq!(ds.idle_count(), 2);
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert_eq!(ds.idle_count(), 0);
+        assert!(ds.metrics().destroy_count() >= 2);
+        assert!(closed.load(Ordering::SeqCst) >= 2);
+        ds.close().await.unwrap(); // 终止后台循环
+    }
+
+    #[tokio::test]
+    async fn test_keepalive_evicts_invalid_idle_connections() {
+        let closed = Arc::new(AtomicU64::new(0));
+        let driver = MockDriver::new(false, closed.clone());
+        let mut c = cfg("mock://a");
+        c.initial_size = 1;
+        c.keep_alive = true;
+        c.keep_alive_between_time_ms = 20;
+        let ds = DruidDataSource::new(driver, c);
+        ds.init().await.unwrap();
+        assert_eq!(ds.idle_count(), 1);
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert_eq!(ds.idle_count(), 0); // 校验失败的空闲连接被保活循环驱逐
+        assert!(closed.load(Ordering::SeqCst) >= 1);
+        ds.close().await.unwrap(); // 终止后台循环
+    }
+
+    #[tokio::test]
+    async fn test_pscache_exposed_with_config() {
+        let mut c = cfg("mock://a");
+        c.pool_prepared_statements = true;
+        c.max_pool_prepared_statement_per_connection_size = 2;
+        let ds = DruidDataSource::new(MockDriver::new(true, Arc::new(AtomicU64::new(0))), c);
+        let mut cache = ds.pscache().lock().unwrap();
+        assert!(!cache.get("SELECT 1"));
+        cache.put("SELECT 1");
+        assert!(cache.get("SELECT 1"));
     }
 }

@@ -134,4 +134,133 @@ mod tests {
         let conn = ProxyConnection::new(inner, fc);
         assert!(conn.close().is_ok());
     }
+
+    /// 可观察 close 行为的 Mock
+    struct TrackingConn {
+        id: u64,
+        closed: std::sync::atomic::AtomicBool,
+        fail_execute: bool,
+    }
+
+    impl TrackingConn {
+        fn new(id: u64, fail_execute: bool) -> Self {
+            TrackingConn {
+                id,
+                closed: std::sync::atomic::AtomicBool::new(false),
+                fail_execute,
+            }
+        }
+    }
+
+    impl RawConnection for TrackingConn {
+        fn execute(&self, _: &str) -> Result<u64, DruidError> {
+            if self.fail_execute {
+                Err(DruidError::Database("query failed".into()))
+            } else {
+                Ok(3)
+            }
+        }
+        fn close(&self) -> Result<(), DruidError> {
+            self.closed.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+        fn id(&self) -> u64 {
+            self.id
+        }
+        fn is_closed(&self) -> bool {
+            self.closed.load(Ordering::SeqCst)
+        }
+    }
+
+    /// 记录 Filter 回调的测试 Filter（共享计数器，filter 本身被 Box 移入链中）
+    #[derive(Default)]
+    struct Counters {
+        created: AtomicU64,
+        closed: AtomicU64,
+        before: AtomicU64,
+        after: AtomicU64,
+    }
+
+    struct CountingFilter {
+        counters: Arc<Counters>,
+    }
+
+    impl druid_filter::Filter for CountingFilter {
+        fn name(&self) -> &'static str {
+            "counting"
+        }
+        fn connection_created(&self, _: &druid_filter::FilterContext) {
+            self.counters.created.fetch_add(1, Ordering::SeqCst);
+        }
+        fn connection_closed(&self, _: &druid_filter::FilterContext) {
+            self.counters.closed.fetch_add(1, Ordering::SeqCst);
+        }
+        fn statement_execute_before(&self, _: &druid_filter::FilterContext) -> Result<(), DruidError> {
+            self.counters.before.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+        fn statement_execute_after(&self, _: &druid_filter::FilterContext, _: u64, _: u64) {
+            self.counters.after.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn test_proxy_close_idempotent() {
+        let inner = Arc::new(TrackingConn::new(1, false));
+        let conn = ProxyConnection::new(inner.clone(), Arc::new(FilterChain::new("test")));
+        assert!(conn.close().is_ok());
+        assert!(conn.close().is_ok()); // 二次 close 幂等
+        assert!(inner.is_closed());
+        assert_eq!(conn.id(), 1);
+    }
+
+    #[test]
+    fn test_proxy_drop_closes_inner() {
+        let inner = Arc::new(TrackingConn::new(1, false));
+        {
+            let _conn = ProxyConnection::new(inner.clone(), Arc::new(FilterChain::new("test")));
+        }
+        assert!(inner.is_closed()); // 未显式 close，drop 时应关闭底层连接
+    }
+
+    #[test]
+    fn test_proxy_execute_error_propagates() {
+        let inner = Arc::new(TrackingConn::new(1, true));
+        let conn = Arc::new(ProxyConnection::new(inner, Arc::new(FilterChain::new("test"))));
+        let stmt = conn.create_statement();
+        let err = stmt.execute("SELECT BAD").unwrap_err();
+        assert!(err.to_string().contains("query failed"));
+    }
+
+    #[test]
+    fn test_proxy_filter_callbacks_fire() {
+        let counters = Arc::new(Counters::default());
+        let mut fc = FilterChain::new("test");
+        fc.add_filter(Box::new(CountingFilter {
+            counters: counters.clone(),
+        }));
+        let fc = Arc::new(fc);
+
+        let inner = Arc::new(TrackingConn::new(9, false));
+        let conn = Arc::new(ProxyConnection::new(inner, fc.clone()));
+        assert_eq!(counters.created.load(Ordering::SeqCst), 1);
+
+        let stmt = conn.create_statement();
+        assert_eq!(stmt.execute("SELECT 1").unwrap(), 3);
+        assert_eq!(counters.before.load(Ordering::SeqCst), 1);
+        assert_eq!(counters.after.load(Ordering::SeqCst), 1);
+
+        conn.close().unwrap();
+        assert_eq!(counters.closed.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_proxy_statement_on_closed_connection_no_panic() {
+        let inner = Arc::new(TrackingConn::new(1, false));
+        let conn = Arc::new(ProxyConnection::new(inner, Arc::new(FilterChain::new("test"))));
+        let stmt = conn.create_statement();
+        conn.close().unwrap();
+        // close 后执行不 panic，底层调用照常转发
+        assert!(stmt.execute("SELECT 1").is_ok());
+    }
 }

@@ -33,6 +33,9 @@ impl PSCache {
 
     /// 缓存新 SQL
     pub fn put(&mut self, sql: &str) {
+        if self.max_size == 0 {
+            return; // 缓存已禁用（pool_prepared_statements = false 时 max_size 为 0）
+        }
         if self.cache.contains_key(sql) {
             return;
         }
@@ -90,5 +93,36 @@ mod tests {
         assert!(cache.get("A"));
         assert!(cache.get("C"));
         assert!(!cache.get("B"));
+    }
+
+    #[test]
+    fn test_pscache_zero_max_size_disabled() {
+        let mut cache = PSCache::new(0);
+        cache.put("A"); // put 应为 no-op
+        assert!(cache.is_empty());
+        assert!(!cache.get("A"));
+    }
+
+    #[test]
+    fn test_pscache_duplicate_put_keeps_hit_count() {
+        let mut cache = PSCache::new(2);
+        cache.put("A");
+        assert!(cache.get("A")); // A hit_count = 2
+        cache.put("A"); // 重复 put 不重置 hit_count
+        cache.put("B");
+        cache.put("C"); // 应淘汰 hit_count 最小的 B
+        assert!(cache.get("A"));
+        assert!(cache.get("C"));
+        assert!(!cache.get("B"));
+    }
+
+    #[test]
+    fn test_pscache_clear() {
+        let mut cache = PSCache::new(2);
+        cache.put("A");
+        cache.put("B");
+        cache.clear();
+        assert!(cache.is_empty());
+        assert!(!cache.get("A"));
     }
 }

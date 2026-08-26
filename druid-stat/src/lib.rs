@@ -191,9 +191,13 @@ impl Filter for StatFilter {
         self.ds_stat.lock().expect("stat lock poisoned").error_count += 1;
         if let Some(sql) = &ctx.sql {
             let mut stats = self.sql_stats.lock().expect("stat lock poisoned");
-            if let Some(entry) = stats.get_mut(sql.as_str()) {
-                entry.error_count += 1;
-            }
+            // 从未成功执行过的 SQL 也需记录错误数，缺条目时创建
+            let entry = if let Some(e) = stats.get_mut(sql.as_str()) {
+                e
+            } else {
+                stats.entry(sql.clone()).or_insert_with(|| SqlStat::new(sql))
+            };
+            entry.error_count += 1;
         }
     }
 }
@@ -238,5 +242,97 @@ mod tests {
         let stat = filter.get_datasource_stat();
         assert_eq!(stat.create_count, 1);
         assert_eq!(stat.borrow_count, 1);
+    }
+
+    #[test]
+    fn test_sql_truncated_to_200_chars() {
+        let filter = StatFilter::new("ds", 1000);
+        let long_sql = "x".repeat(300);
+        filter.statement_execute_after(&FilterContext::new("ds").with_sql(&long_sql), 5, 0);
+        let stats = filter.get_sql_stats();
+        assert_eq!(stats.len(), 1);
+        assert_eq!(stats[0].sql.len(), 200);
+    }
+
+    #[test]
+    fn test_sql_stats_sorted_by_total_time_desc() {
+        let filter = StatFilter::new("ds", 1000);
+        filter.statement_execute_after(&FilterContext::new("ds").with_sql("SLOW"), 500, 0);
+        filter.statement_execute_after(&FilterContext::new("ds").with_sql("FAST"), 10, 0);
+        filter.statement_execute_after(&FilterContext::new("ds").with_sql("SLOW"), 100, 0);
+
+        let stats = filter.get_sql_stats();
+        assert_eq!(stats.len(), 2);
+        assert_eq!(stats[0].sql, "SLOW"); // 总耗时 600 > 10
+        assert_eq!(stats[0].total_time_ms, 600);
+        assert_eq!(stats[0].max_time_ms, 500);
+        assert_eq!(stats[1].sql, "FAST");
+    }
+
+    #[test]
+    fn test_rows_read_accumulates() {
+        let filter = StatFilter::new("ds", 1000);
+        let ctx = FilterContext::new("ds").with_sql("SELECT");
+        filter.statement_execute_after(&ctx, 1, 100);
+        filter.statement_execute_after(&ctx, 1, 50);
+        let stats = filter.get_sql_stats();
+        assert_eq!(stats[0].rows_read, 150);
+        assert_eq!(stats[0].execute_count, 2);
+    }
+
+    #[test]
+    fn test_statement_error_counting() {
+        let filter = StatFilter::new("ds", 1000);
+        let ctx = FilterContext::new("ds").with_sql("BAD SQL");
+        let err = DruidError::SqlParse("syntax".into());
+        filter.statement_error(&ctx, &err);
+        filter.statement_error(&ctx, &err);
+
+        let ds_stat = filter.get_datasource_stat();
+        assert_eq!(ds_stat.error_count, 2);
+        let stats = filter.get_sql_stats();
+        assert_eq!(stats[0].error_count, 2);
+    }
+
+    #[test]
+    fn test_slow_sql_boundary_inclusive() {
+        let filter = StatFilter::new("ds", 100);
+        let ctx = FilterContext::new("ds").with_sql("BOUNDARY");
+        filter.statement_execute_after(&ctx, 100, 0); // 恰好等于阈值
+        assert_eq!(filter.get_slow_sql().len(), 1);
+
+        filter.statement_execute_after(&ctx, 99, 0);
+        assert_eq!(filter.get_slow_sql().len(), 1); // 只有一条达到阈值
+    }
+
+    #[test]
+    fn test_unknown_sql_default_name() {
+        let filter = StatFilter::new("ds", 1000);
+        filter.statement_execute_after(&FilterContext::new("ds"), 5, 0); // 无 SQL
+        let stats = filter.get_sql_stats();
+        assert_eq!(stats.len(), 1);
+        assert_eq!(stats[0].sql, "UNKNOWN");
+    }
+
+    #[test]
+    fn test_datasource_stat_full_connection_lifecycle() {
+        let filter = StatFilter::new("ds", 1000);
+        filter.connection_created(&FilterContext::new("ds"));
+        filter.connection_borrowed(&FilterContext::new("ds"), 15);
+        filter.connection_returned(&FilterContext::new("ds"));
+        filter.connection_closed(&FilterContext::new("ds"));
+
+        let stat = filter.get_datasource_stat();
+        assert_eq!(stat.create_count, 1);
+        assert_eq!(stat.borrow_count, 1);
+        assert_eq!(stat.return_count, 1);
+        assert_eq!(stat.destroy_count, 1);
+        assert_eq!(stat.total_wait_time_ms, 15);
+        // created(+1) → borrowed(-1) → returned(+1) → closed(-1) = 0
+        assert_eq!(stat.idle_count, 0);
+        assert_eq!(filter.execute_count(), 0);
+
+        filter.statement_execute_before(&FilterContext::new("ds")).unwrap();
+        assert_eq!(filter.execute_count(), 1);
     }
 }

@@ -28,6 +28,7 @@ impl SchemaVisitor {
         }
         for join in &stmt.joins {
             self.visit_table_ref(&join.table);
+            self.visit_expr(&join.on, "");
         }
         for col in &stmt.columns {
             self.visit_select_item(col);
@@ -244,5 +245,68 @@ mod tests {
         assert!(visitor.tables.contains("products"));
         assert!(visitor.columns.get("products").unwrap().contains("name"));
         assert!(visitor.columns.get("products").unwrap().contains("price"));
+    }
+
+    fn visit(sql: &str) -> SchemaVisitor {
+        let stmts = parse_sql(sql).unwrap();
+        let mut v = SchemaVisitor::new();
+        for stmt in &stmts {
+            v.visit_statement(stmt);
+        }
+        v
+    }
+
+    #[test]
+    fn test_visitor_update_delete() {
+        let v = visit("UPDATE orders SET total = total + 1 WHERE id = 5; DELETE FROM logs");
+        assert!(v.tables.contains("orders"));
+        assert!(v.tables.contains("logs"));
+        assert!(v.columns.get("orders").unwrap().contains("total"));
+        assert!(v.columns.get("orders").unwrap().contains("id"));
+        // 单列限定表达式 total + 1 中的 total 归属 orders
+        assert!(v.columns.get("orders").unwrap().contains("total"));
+    }
+
+    #[test]
+    fn test_visitor_create_and_drop() {
+        let v = visit("CREATE TABLE t (id INT, name VARCHAR(10)); DROP TABLE old_t");
+        assert!(v.tables.contains("t"));
+        assert!(v.columns.get("t").unwrap().contains("id"));
+        assert!(v.columns.get("t").unwrap().contains("name"));
+        assert!(v.tables.contains("old_t"));
+    }
+
+    #[test]
+    fn test_visitor_subquery_and_exists() {
+        let v = visit(
+            "SELECT * FROM t WHERE EXISTS (SELECT u.id FROM u WHERE u.tid = t.id) \
+             AND x IN (SELECT y.id FROM y)",
+        );
+        assert!(v.tables.contains("t"));
+        assert!(v.tables.contains("u"));
+        assert!(v.tables.contains("y"));
+        assert!(v.columns.get("u").unwrap().contains("id"));
+        assert!(v.columns.get("u").unwrap().contains("tid"));
+        assert!(v.columns.get("t").unwrap().contains("id"));
+        assert!(v.columns.get("y").unwrap().contains("id"));
+    }
+
+    #[test]
+    fn test_visitor_qualified_table() {
+        let v = visit("SELECT a.id FROM db.users a JOIN db.orders o ON a.id = o.uid");
+        assert!(v.tables.contains("db.users"));
+        assert!(v.tables.contains("db.orders"));
+        // 列按别名归属（现有约定）
+        assert!(v.columns.get("a").unwrap().contains("id"));
+        assert!(v.columns.get("o").unwrap().contains("uid"));
+    }
+
+    #[test]
+    fn test_visitor_cte_recursion() {
+        let v = visit("WITH x AS (SELECT id FROM src) SELECT id FROM x");
+        assert!(v.tables.contains("src"));
+        assert!(v.tables.contains("x"));
+        // 无表限定的列在 SELECT 列表中被丢弃（visit_expr 空表上下文约定）
+        assert!(v.columns.get("src").is_none());
     }
 }

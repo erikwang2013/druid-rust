@@ -65,8 +65,8 @@ fn scheme_contains(url: &str, pat: &str) -> bool {
 
 pub fn is_select_sql(sql: &str) -> bool {
     let t = sql.trim_start();
-    t.len() >= 6 && t[..6].eq_ignore_ascii_case("select")
-        || t.len() >= 4 && t[..4].eq_ignore_ascii_case("with")
+    t.get(..6).is_some_and(|p| p.eq_ignore_ascii_case("select"))
+        || t.get(..4).is_some_and(|p| p.eq_ignore_ascii_case("with"))
 }
 
 pub fn is_write_sql(sql: &str) -> bool {
@@ -145,10 +145,103 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_db_type_all_dialects() {
+        for (url, expect) in [
+            ("jdbc:mysql://h/db", Some(DbType::MySQL)),
+            ("jdbc:postgresql://h/db", Some(DbType::PostgreSQL)),
+            ("jdbc:oracle://h:1521/db", Some(DbType::Oracle)),
+            ("jdbc:sqlserver://h:1433;db=db", Some(DbType::SqlServer)),
+            ("jdbc:mssql://h/db", Some(DbType::SqlServer)),
+            ("jdbc:db2://h/db", Some(DbType::DB2)),
+            ("jdbc:h2:mem:test", Some(DbType::H2)),
+            ("jdbc:clickhouse://h/db", Some(DbType::ClickHouse)),
+            ("jdbc:doris://h/db", Some(DbType::Doris)),
+            ("jdbc:starrocks://h/db", Some(DbType::StarRocks)),
+            ("jdbc:hive2://h:10000/db", Some(DbType::Hive)),
+            ("jdbc:presto://h:8080/db", Some(DbType::Presto)),
+            ("jdbc:impala://h/db", Some(DbType::Impala)),
+            ("jdbc:snowflake://h/db", Some(DbType::Snowflake)),
+            ("jdbc:bigquery://h/db", Some(DbType::BigQuery)),
+            ("jdbc:redshift://h/db", Some(DbType::Redshift)),
+            ("jdbc:spark://h/db", Some(DbType::Spark)),
+            ("jdbc:phoenix://h/db", Some(DbType::Phoenix)),
+            ("jdbc:teradata://h/db", Some(DbType::Teradata)),
+            ("jdbc:informix-sqli://h/db", Some(DbType::Informix)),
+            ("jdbc:athena://h/db", Some(DbType::Athena)),
+            ("jdbc:gaussdb://h/db", Some(DbType::GaussDB)),
+            ("jdbc:dameng://h/db", Some(DbType::DM)),
+            ("jdbc:odps://h/db", Some(DbType::ODPS)),
+            ("jdbc:maxcompute://h/db", Some(DbType::ODPS)),
+            ("jdbc:hologres://h/db", Some(DbType::Hologres)),
+        ] {
+            assert_eq!(detect_db_type_from_url(url), expect, "url {url}");
+        }
+    }
+
+    #[test]
+    fn test_detect_db_type_edge_cases() {
+        // 大小写不敏感
+        assert_eq!(
+            detect_db_type_from_url("jdbc:MySQL://h/db"),
+            Some(DbType::MySQL)
+        );
+        // 无 :// 分隔时 scheme 匹配失效，但 h2 例外（整体 starts_with 匹配）
+        assert_eq!(detect_db_type_from_url("jdbc:h2:mem:test"), Some(DbType::H2));
+        assert!(detect_db_type_from_url("jdbc:mysql:db").is_none());
+        // Oracle thin 格式（无 "://"）无法识别 —— 既有启发式行为，保留文档化
+        assert!(detect_db_type_from_url("jdbc:oracle:thin:@h:1521/db").is_none());
+        // db2 防误判 guard
+        assert!(detect_db_type_from_url("jdbc:not-db2://h/db").is_none());
+        assert!(detect_db_type_from_url("").is_none());
+        // 非 JDBC URL
+        assert_eq!(
+            detect_db_type_from_url("postgres://user@h/db"),
+            Some(DbType::PostgreSQL)
+        );
+    }
+
+    #[test]
     fn test_sql_types() {
         assert_eq!(get_sql_type("SELECT * FROM users"), "SELECT");
         assert_eq!(get_sql_type("INSERT INTO users VALUES (1)"), "INSERT");
         assert_eq!(get_sql_type(""), "EMPTY");
+        assert_eq!(get_sql_type("   \t  "), "EMPTY"); // 纯空白
+    }
+
+    #[test]
+    fn test_get_sql_type_full_coverage() {
+        for (sql, expect) in [
+            ("select 1", "SELECT"),
+            ("WITH cte AS (SELECT 1) SELECT * FROM cte", "SELECT"),
+            ("insert into t values (1)", "INSERT"),
+            ("update t set a=1", "UPDATE"),
+            ("delete from t", "DELETE"),
+            ("create table t (a int)", "CREATE"),
+            ("alter table t add b int", "ALTER"),
+            ("drop table t", "DROP"),
+            ("truncate table t", "TRUNCATE"),
+            ("merge into t using s on (1=1)", "MERGE"),
+            ("replace into t values (1)", "MERGE"),
+            ("explain select 1", "EXPLAIN"),
+            ("desc t", "EXPLAIN"),
+            ("describe t", "EXPLAIN"),
+            ("show tables", "SHOW"),
+            ("set names utf8", "SET"),
+            ("begin", "TRANSACTION"),
+            ("START TRANSACTION", "TRANSACTION"),
+            ("start foo", "OTHER"), // start 后非 transaction
+            ("commit", "COMMIT"),
+            ("rollback", "ROLLBACK"),
+            ("grant select on t to u", "DCL"),
+            ("revoke select on t from u", "DCL"),
+            ("call proc(1)", "CALL"),
+            ("execute proc", "CALL"),
+            ("vacuum", "OTHER"),
+            ("选择 * from t", "OTHER"), // 多字节首词不回退为 SELECT
+        ] {
+            assert_eq!(get_sql_type(sql), expect, "sql {sql:?}");
+        }
+        assert_eq!(get_sql_type(" start transaction"), "TRANSACTION"); // 前后空白容忍
     }
 
     #[test]
@@ -156,11 +249,49 @@ mod tests {
         assert!(is_select_sql("SELECT * FROM t"));
         assert!(is_select_sql("WITH cte AS (SELECT 1) SELECT * FROM cte"));
         assert!(!is_select_sql("INSERT INTO t VALUES (1)"));
+        assert!(is_select_sql("select")); // 恰好 6 字节
+        assert!(is_select_sql("  select 1"));
+        assert!(!is_select_sql(""));
+        assert!(!is_select_sql("s"));
+        assert!(!is_select_sql("sel"));
+        assert!(is_select_sql("selectivly-other")); // 前缀匹配语义（非完整词也命中）
+        assert!(!is_select_sql("INSERT"));
+        assert!(!is_select_sql("选择")); // 多字节无 panic 且非 select
+        assert!(!is_select_sql("你好select"));
     }
 
     #[test]
     fn test_is_write() {
-        assert!(is_write_sql("INSERT INTO t VALUES (1)"));
+        for sql in [
+            "INSERT INTO t VALUES (1)",
+            "UPDATE t SET a=1",
+            "DELETE FROM t",
+            "REPLACE INTO t VALUES (1)",
+            "MERGE INTO t USING s ON (1=1)",
+            "  insert into t",
+        ] {
+            assert!(is_write_sql(sql), "sql {sql:?}");
+        }
         assert!(!is_write_sql("SELECT * FROM t"));
+        assert!(!is_write_sql(""));
+        assert!(is_write_sql("insertx into t")); // 前缀匹配语义
+        assert!(!is_write_sql("更新 t"));
+    }
+
+    #[test]
+    fn test_is_ddl() {
+        for sql in [
+            "CREATE TABLE t (a INT)",
+            "ALTER TABLE t ADD b INT",
+            "DROP TABLE t",
+            "TRUNCATE TABLE t",
+            "RENAME TABLE a TO b",
+            "  create index i on t(a)",
+        ] {
+            assert!(is_ddl_sql(sql), "sql {sql:?}");
+        }
+        assert!(!is_ddl_sql("SELECT 1"));
+        assert!(!is_ddl_sql(""));
+        assert!(is_ddl_sql("CREATE")); // 恰好一个词也算 DDL（前缀匹配语义）
     }
 }

@@ -185,4 +185,144 @@ mod tests {
         assert!(escaped.contains("&lt;"));
         assert!(escaped.contains("&gt;"));
     }
+
+    #[test]
+    fn test_html_escape_all_chars() {
+        let escaped = html_escape("&<>\"'/");
+        assert_eq!(escaped, "&amp;&lt;&gt;&quot;&#x27;&#x2F;");
+        assert_eq!(html_escape("plain text 123"), "plain text 123");
+        assert_eq!(html_escape(""), "");
+        // 无特殊字符时原样返回
+        assert_eq!(html_escape("select * from t"), "select * from t");
+    }
+
+    #[tokio::test]
+    async fn test_stat_json_body() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/stat.json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+        let body = axum::body::to_bytes(resp.into_body(), 102400)
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["name"], "test-ds");
+        assert_eq!(v["active_count"], 0);
+        assert_eq!(v["execute_count"], 0);
+    }
+
+    #[tokio::test]
+    async fn test_sql_json_body_is_array() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/sql.json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 102400)
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(v.is_array());
+    }
+
+    #[tokio::test]
+    async fn test_slow_sql_json_body_is_array() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/slow-sql.json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), 102400)
+            .await
+            .unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(v.is_array());
+    }
+
+    #[tokio::test]
+    async fn test_index_contains_datasource_name() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/index.html")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("content-type").unwrap(),
+            "text/html; charset=utf-8"
+        );
+        let body = axum::body::to_bytes(resp.into_body(), 102400)
+            .await
+            .unwrap();
+        let html = String::from_utf8_lossy(&body);
+        assert!(html.contains("Druid Monitor — test-ds"));
+        assert!(html.contains("SQL Stats (Top 20)"));
+    }
+
+    #[tokio::test]
+    async fn test_unknown_route_404() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/nope")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_druid_config_serde_roundtrip() {
+        // 跨 crate 验证 druid-core 配置序列化：
+        // 密码 skip_serializing 不落盘，且反序列化（缺省）不报错
+        let mut cfg = druid_core::DruidConfig::new("jdbc:mysql://h/db", "root", "secret");
+        cfg.max_active = 16;
+        cfg.keep_alive = true;
+
+        let json = serde_json::to_string(&cfg).unwrap();
+        assert!(!json.contains("secret"));
+        assert!(!json.contains("password"));
+
+        let back: druid_core::DruidConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.url, cfg.url);
+        assert_eq!(back.username, "root");
+        assert_eq!(back.password, "");
+        assert_eq!(back.max_active, 16);
+        assert!(back.keep_alive);
+    }
+
+    #[test]
+    fn test_druid_config_serde_partial_json() {
+        let json = r#"{"url":"jdbc:h2:mem:test","username":"sa"}"#;
+        let cfg: druid_core::DruidConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(cfg.password, "");
+        assert_eq!(cfg.max_active, 8); // serde default
+        assert!(cfg.test_on_borrow); // serde default = true
+    }
+
+    #[test]
+    fn test_db_type_serde_renames() {
+        use druid_core::DbType;
+        assert_eq!(serde_json::to_string(&DbType::SqlServer).unwrap(), "\"sqlserver\"");
+        assert_eq!(serde_json::to_string(&DbType::DM).unwrap(), "\"dm\"");
+        assert_eq!(serde_json::to_string(&DbType::TransactSql).unwrap(), "\"transact-sql\"");
+        assert_eq!(serde_json::to_string(&DbType::ODPS).unwrap(), "\"odps\"");
+        assert_eq!(serde_json::to_string(&DbType::MySQL).unwrap(), "\"MySQL\"");
+
+        let back: DbType = serde_json::from_str("\"dm\"").unwrap();
+        assert_eq!(back, DbType::DM);
+        let back: DbType = serde_json::from_str("\"sqlserver\"").unwrap();
+        assert_eq!(back, DbType::SqlServer);
+    }
 }

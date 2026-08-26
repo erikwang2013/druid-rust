@@ -320,22 +320,34 @@ impl WallChecker {
             return WallCheckResult::deny("SQL too long".into());
         }
         let s = sql.trim().to_lowercase();
+        // 剔除单引号字符串字面量：字符串/注释内的单词不应命中关键字
+        let mut bare = String::new();
+        let mut in_str = false;
+        for c in s.chars() {
+            if c == '\'' {
+                in_str = !in_str;
+            } else if !in_str {
+                bare.push(c);
+            }
+        }
+        // 函数名匹配忽略空白：SLEEP (1) 与 SLEEP(1) 同样拦截
+        let compact: String = bare.chars().filter(|c| !c.is_whitespace()).collect();
         for func in &self.config.deny_functions {
-            if s.contains(&format!("{}(", func.to_lowercase())) {
+            if compact.contains(&format!("{}(", func.to_lowercase())) {
                 return WallCheckResult::deny(format!("forbidden: {}", func));
             }
         }
         for kw in &self.config.deny_keywords {
             let kw_lower = kw.to_lowercase();
-            if let Some(pos) = s.find(&kw_lower) {
+            if let Some(pos) = bare.find(&kw_lower) {
                 let before = pos == 0 || {
-                    let c = s.as_bytes()[pos - 1];
+                    let c = bare.as_bytes()[pos - 1];
                     !c.is_ascii_alphanumeric() && c != b'_'
                 };
                 let after = {
                     let end = pos + kw_lower.len();
-                    end >= s.len() || {
-                        let c = s.as_bytes()[end];
+                    end >= bare.len() || {
+                        let c = bare.as_bytes()[end];
                         !c.is_ascii_alphanumeric() && c != b'_'
                     }
                 };
@@ -352,6 +364,15 @@ impl WallChecker {
 mod tests {
     use super::*;
     use druid_sql::parse_sql;
+
+    /// 解析单条语句并执行完整 AST 检查
+    fn check_one(c: &WallChecker, sql: &str) -> WallCheckResult {
+        let stmts = parse_sql(sql).expect("sql should parse");
+        c.check(sql, &stmts[0])
+    }
+
+    // ── 基本放行/拦截 ──
+
     #[test]
     fn test_allow() {
         let c = WallChecker::new(WallConfig::default());
@@ -376,5 +397,199 @@ mod tests {
             ..Default::default()
         };
         assert!(WallChecker::new(cfg).quick_check("DROP TABLE x").allowed);
+    }
+
+    // ── 操作拦截 ──
+
+    #[test]
+    fn test_deny_insert_when_configured() {
+        let cfg = WallConfig {
+            deny_operations: vec![DenyOperation::Insert],
+            ..Default::default()
+        };
+        let c = WallChecker::new(cfg);
+        let r = check_one(&c, "INSERT INTO users (id) VALUES (1)");
+        assert!(!r.allowed);
+        assert_eq!(r.violations[0].message, "INSERT denied");
+    }
+
+    #[test]
+    fn test_deny_update_and_delete_default_require_where() {
+        let c = WallChecker::new(WallConfig::default());
+        // 默认 update_delete_require_where = true
+        let r = check_one(&c, "UPDATE users SET name='x'");
+        assert!(!r.allowed);
+        assert_eq!(r.violations[0].message, "UPDATE without WHERE");
+        let r = check_one(&c, "DELETE FROM users");
+        assert!(!r.allowed);
+        assert_eq!(r.violations[0].message, "DELETE without WHERE");
+        // 带 WHERE 则放行
+        assert!(check_one(&c, "UPDATE users SET name='x' WHERE id=1").allowed);
+        assert!(check_one(&c, "DELETE FROM users WHERE id=1").allowed);
+    }
+
+    #[test]
+    fn test_require_where_disabled() {
+        let cfg = WallConfig {
+            update_delete_require_where: false,
+            ..Default::default()
+        };
+        let c = WallChecker::new(cfg);
+        assert!(check_one(&c, "UPDATE users SET name='x'").allowed);
+        assert!(check_one(&c, "DELETE FROM users").allowed);
+    }
+
+    #[test]
+    fn test_deny_update_operation() {
+        let cfg = WallConfig {
+            deny_operations: vec![DenyOperation::Update],
+            ..Default::default()
+        };
+        let c = WallChecker::new(cfg);
+        assert!(!check_one(&c, "UPDATE users SET name='x' WHERE id=1").allowed);
+    }
+
+    #[test]
+    fn test_create_table_deny_when_configured() {
+        let cfg = WallConfig {
+            deny_operations: vec![DenyOperation::CreateTable],
+            ..Default::default()
+        };
+        let c = WallChecker::new(cfg);
+        assert!(!check_one(&c, "CREATE TABLE t (id INT)").allowed);
+        // 默认配置下 CREATE TABLE 放行（默认只拒绝 TRUNCATE/DROP/ALTER）
+        let c = WallChecker::new(WallConfig::default());
+        assert!(check_one(&c, "CREATE TABLE t (id INT)").allowed);
+    }
+
+    // ── 函数拦截（AST 递归） ──
+
+    #[test]
+    fn test_sleep_in_where_denied() {
+        let c = WallChecker::new(WallConfig::default());
+        let r = check_one(&c, "SELECT id FROM users WHERE id=SLEEP(1)");
+        assert!(!r.allowed);
+        assert!(r.violations[0].message.contains("forbidden function"));
+    }
+
+    #[test]
+    fn test_deny_function_case_insensitive() {
+        let c = WallChecker::new(WallConfig::default());
+        assert!(!check_one(&c, "SELECT sleep(5)").allowed);
+        assert!(!check_one(&c, "SELECT benchMark(1000000, md5('x'))").allowed);
+    }
+
+    #[test]
+    fn test_deny_function_in_subquery_and_case_when() {
+        let c = WallChecker::new(WallConfig::default());
+        assert!(!check_one(
+            &c,
+            "SELECT id FROM users WHERE id IN (SELECT id FROM t WHERE x=SLEEP(1))"
+        )
+        .allowed);
+        assert!(!check_one(
+            &c,
+            "SELECT CASE WHEN SLEEP(1)=1 THEN 1 ELSE 0 END FROM users"
+        )
+        .allowed);
+    }
+
+    #[test]
+    fn test_similar_function_name_allowed() {
+        // 只拦截完全匹配的函数名
+        let c = WallChecker::new(WallConfig::default());
+        assert!(check_one(&c, "SELECT SLEEPLESS(1)").allowed);
+        assert!(check_one(&c, "SELECT my_sleep(1)").allowed);
+    }
+
+    // ── quick_check（纯文本） ──
+
+    #[test]
+    fn test_quick_check_keyword_boundary() {
+        let cfg = WallConfig {
+            deny_keywords: vec!["drop".into()],
+            ..Default::default()
+        };
+        let c = WallChecker::new(cfg);
+        // 词边界：drop 在单词中间不应命中
+        assert!(c.quick_check("SELECT * FROM dropdown").allowed);
+        assert!(c.quick_check("SELECT * FROM x WHERE y='not drop here'").allowed);
+        assert!(!c.quick_check("SELECT * FROM users DROP").allowed);
+    }
+
+    #[test]
+    fn test_quick_check_function_case_insensitive() {
+        let c = WallChecker::new(WallConfig::default());
+        assert!(!c.quick_check("select sleep (1)").allowed); // 括号前带空格同样拦截
+        assert!(!c.quick_check("SELECT SLEEP(10)").allowed);
+        assert!(c.quick_check("SELECT * FROM sleeping_table").allowed);
+        // 字符串字面量里的函数名不拦截
+        assert!(c.quick_check("SELECT 'sleep(1)'").allowed);
+    }
+
+    #[test]
+    fn test_quick_check_sql_too_long() {
+        let cfg = WallConfig {
+            max_sql_length: 10,
+            ..Default::default()
+        };
+        let c = WallChecker::new(cfg);
+        let r = c.quick_check("SELECT 12345");
+        assert!(!r.allowed);
+        assert_eq!(r.violations[0].message, "SQL too long");
+    }
+
+    #[test]
+    fn test_ast_check_sql_too_long() {
+        let cfg = WallConfig {
+            max_sql_length: 10,
+            ..Default::default()
+        };
+        let c = WallChecker::new(cfg);
+        let long = "SELECT 123456789012345";
+        let s = parse_sql(long).unwrap();
+        let r = c.check(long, &s[0]);
+        assert!(!r.allowed);
+        assert!(r.violations[0].message.contains("max"));
+    }
+
+    #[test]
+    fn test_into_outfile_denied_by_default() {
+        let c = WallChecker::new(WallConfig::default());
+        // parser 不支持 INTO 子句，checker 通过原始 SQL 文本拦截
+        let s = parse_sql("SELECT * FROM users").unwrap();
+        let r = c.check("SELECT * FROM users INTO OUTFILE '/tmp/x'", &s[0]);
+        assert!(!r.allowed);
+        assert_eq!(r.violations[0].message, "INTO OUTFILE denied");
+        let cfg = WallConfig {
+            select_into_outfile_allow: true,
+            ..Default::default()
+        };
+        let c = WallChecker::new(cfg);
+        let r = c.check("SELECT * FROM users INTO OUTFILE '/tmp/x'", &s[0]);
+        assert!(r.allowed);
+    }
+
+    #[test]
+    fn test_select_deny_when_configured() {
+        let cfg = WallConfig {
+            deny_operations: vec![DenyOperation::Select],
+            ..Default::default()
+        };
+        let c = WallChecker::new(cfg);
+        let r = check_one(&c, "SELECT 1");
+        assert!(!r.allowed);
+        assert_eq!(r.violations[0].message, "SELECT denied");
+    }
+
+    #[test]
+    fn test_violation_and_result_helpers() {
+        let r = WallCheckResult::pass();
+        assert!(r.allowed);
+        assert!(r.violations.is_empty());
+        let r = WallCheckResult::deny("nope".into());
+        assert!(!r.allowed);
+        assert_eq!(r.violations[0].message, "nope");
+        assert_eq!(Violation::new("m").message, "m");
     }
 }

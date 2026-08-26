@@ -90,6 +90,11 @@ impl WallProvider {
 mod tests {
     use super::*;
     use crate::config::WallConfig;
+
+    fn provider(max: usize) -> WallProvider {
+        WallProvider::new(WallChecker::new(WallConfig::default()), max)
+    }
+
     #[test]
     fn test_cache() {
         let c = WallChecker::new(WallConfig::default());
@@ -97,5 +102,72 @@ mod tests {
         p.check("SELECT 1");
         p.check("SELECT 1");
         assert_eq!(p.hit_count, 1);
+    }
+
+    #[test]
+    fn test_check_counts_and_hit_rate() {
+        let mut p = provider(100);
+        assert_eq!(p.hit_rate(), 0.0); // 空计数不除零
+        p.check("SELECT 1");
+        p.check("SELECT 1");
+        p.check("SELECT 2");
+        assert_eq!(p.check_count, 3);
+        assert_eq!(p.hit_count, 1);
+        assert!((p.hit_rate() - 1.0 / 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_deny_result_is_cached() {
+        let mut p = provider(100);
+        let r = p.check("DROP TABLE users");
+        assert!(!r.allowed);
+        let r = p.check("DROP TABLE users"); // 缓存命中
+        assert!(!r.allowed);
+        assert_eq!(p.hit_count, 1);
+    }
+
+    #[test]
+    fn test_parse_failure_is_cached_as_pass() {
+        // 无法解析的 SQL：AST 检查跳过，但结果仍被缓存
+        let mut p = provider(100);
+        assert!(p.check("NOT VALID SQL !!!").allowed);
+        assert!(p.check("NOT VALID SQL !!!").allowed);
+        assert_eq!(p.hit_count, 1);
+    }
+
+    #[test]
+    fn test_cache_eviction() {
+        let mut p = provider(4);
+        for i in 0..6 {
+            p.check(&format!("SELECT {}", i));
+        }
+        // 超过容量时淘汰一半
+        assert!(p.cache_size() <= 4);
+        assert_eq!(p.order.len(), p.cache_size());
+        // 最旧的条目已被淘汰：再次查询应 miss
+        let before = p.hit_count;
+        p.check("SELECT 0");
+        assert_eq!(p.hit_count, before, "最旧条目应已被淘汰");
+    }
+
+    #[test]
+    fn test_clear_cache() {
+        let mut p = provider(100);
+        p.check("SELECT 1");
+        p.check("SELECT 1");
+        p.clear_cache();
+        assert_eq!(p.cache_size(), 0);
+        assert_eq!(p.hit_count, 1); // 计数保留
+        p.check("SELECT 1"); // 清空后重新缓存
+        assert_eq!(p.cache_size(), 1);
+    }
+
+    #[test]
+    fn test_cache_size_never_exceeds_max() {
+        let mut p = provider(2);
+        for i in 0..10 {
+            p.check(&format!("SELECT {}", i));
+            assert!(p.cache_size() <= 2);
+        }
     }
 }

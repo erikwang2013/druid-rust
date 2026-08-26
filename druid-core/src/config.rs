@@ -8,8 +8,8 @@ pub struct DruidConfig {
     pub url: String,
     /// 用户名
     pub username: String,
-    /// 密码
-    #[serde(skip_serializing)]
+    /// 密码（序列化时不输出；反序列化时缺省为空串）
+    #[serde(skip_serializing, default)]
     pub password: String,
     /// 数据库驱动类名
     pub driver_class_name: Option<String>,
@@ -226,5 +226,93 @@ impl std::fmt::Debug for DruidConfig {
             .field("connect_timeout_secs", &self.connect_timeout_secs)
             .field("socket_timeout_secs", &self.socket_timeout_secs)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_sets_credentials() {
+        let cfg = DruidConfig::new("jdbc:mysql://localhost/db", "root", "s3cret");
+        assert_eq!(cfg.url, "jdbc:mysql://localhost/db");
+        assert_eq!(cfg.username, "root");
+        assert_eq!(cfg.password, "s3cret");
+    }
+
+    #[test]
+    fn test_new_defaults() {
+        let cfg = DruidConfig::new("", "", "");
+        assert_eq!(cfg.initial_size, 0);
+        assert_eq!(cfg.min_idle, 0);
+        assert_eq!(cfg.max_active, 8);
+        assert_eq!(cfg.max_wait_ms, 0);
+        assert_eq!(cfg.time_between_eviction_runs_ms, 60_000);
+        assert_eq!(cfg.min_evictable_idle_time_ms, 1_800_000);
+        assert_eq!(cfg.max_evictable_idle_time_ms, 25_200_000);
+        assert_eq!(cfg.max_lifetime_ms, 0);
+        assert!(cfg.test_on_borrow);
+        assert!(!cfg.test_on_return);
+        assert!(!cfg.test_while_idle);
+        assert_eq!(cfg.validation_query_timeout_secs, 0);
+        assert!(!cfg.pool_prepared_statements);
+        assert_eq!(cfg.max_pool_prepared_statement_per_connection_size, 10);
+        assert!(!cfg.keep_alive);
+        assert_eq!(cfg.keep_alive_between_time_ms, 120_000);
+        assert!(cfg.filters.is_empty());
+        assert!(cfg.connection_properties.is_empty());
+        assert_eq!(cfg.connect_timeout_secs, 30);
+        assert_eq!(cfg.socket_timeout_secs, 30);
+    }
+
+    #[test]
+    fn test_default_trait_matches_new() {
+        let d = DruidConfig::default();
+        let n = DruidConfig::new("", "", "");
+        assert_eq!(d.url, n.url);
+        assert_eq!(d.max_active, n.max_active);
+        assert_eq!(d.test_on_borrow, n.test_on_borrow);
+        assert_eq!(d.time_between_eviction_runs_ms, n.time_between_eviction_runs_ms);
+    }
+
+    #[test]
+    fn test_max_wait_boundaries() {
+        let cfg = DruidConfig::new("", "", "");
+        assert_eq!(cfg.max_wait(), None); // 0 表示不限制
+        let mut cfg = cfg.clone();
+        cfg.max_wait_ms = 500;
+        assert_eq!(cfg.max_wait(), Some(Duration::from_millis(500)));
+    }
+
+    #[test]
+    fn test_duration_helpers() {
+        let mut cfg = DruidConfig::new("", "", "");
+        cfg.time_between_eviction_runs_ms = 1234;
+        cfg.keep_alive_between_time_ms = 5678;
+        cfg.connect_timeout_secs = 42;
+        assert_eq!(cfg.eviction_interval(), Duration::from_millis(1234));
+        assert_eq!(cfg.keep_alive_interval(), Duration::from_millis(5678));
+        assert_eq!(cfg.connect_timeout(), Duration::from_secs(42));
+    }
+
+    #[test]
+    fn test_debug_masks_password() {
+        let cfg = DruidConfig::new("jdbc:mysql://h/db", "root", "topsecret");
+        let dbg = format!("{:?}", cfg);
+        assert!(!dbg.contains("topsecret"));
+        assert!(dbg.contains("***"));
+        assert!(dbg.contains("root"));
+    }
+
+    // serde 序列化/反序列化测试见 druid-console 中的跨 crate 测试
+    // （serde_json 非本 crate 依赖，且不允许修改 Cargo.toml）
+
+    #[test]
+    fn test_config_is_clonable() {
+        let cfg = DruidConfig::new("url", "u", "p");
+        let cloned = cfg.clone();
+        assert_eq!(cloned.url, cfg.url);
+        assert_eq!(cloned.password, cfg.password);
     }
 }

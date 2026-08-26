@@ -125,3 +125,63 @@ impl std::fmt::Debug for dyn Filter {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_context_new_defaults() {
+        let ctx = FilterContext::new("ds");
+        assert_eq!(ctx.data_source_name, "ds");
+        assert!(ctx.db_type.is_none());
+        assert!(ctx.sql.is_none());
+        assert!(ctx.connection_id.is_none());
+        assert!(ctx.statement_id.is_none());
+    }
+
+    #[test]
+    fn test_context_builders_chain() {
+        let ctx = FilterContext::new("ds")
+            .with_sql("SELECT 1")
+            .with_connection(7)
+            .with_statement(42);
+        assert_eq!(ctx.sql.as_deref(), Some("SELECT 1"));
+        assert_eq!(ctx.connection_id, Some(7));
+        assert_eq!(ctx.statement_id, Some(42));
+    }
+
+    /// 只覆写 name 的最小 Filter
+    struct MinimalFilter;
+    impl Filter for MinimalFilter {}
+
+    #[test]
+    fn test_trait_default_methods() {
+        let mut f = MinimalFilter;
+        assert!(f.init().is_ok());
+        assert_eq!(f.name(), "druid_filter::tests::MinimalFilter");
+        f.destroy();
+        let ctx = FilterContext::new("ds");
+        f.connection_created(&ctx);
+        f.connection_borrow_before(&ctx);
+        f.connection_borrowed(&ctx, 1);
+        f.connection_return_before(&ctx);
+        f.connection_returned(&ctx);
+        f.connection_closed(&ctx);
+        f.connection_error(&ctx, &DruidError::Pool("x".into()));
+        f.statement_created(&ctx);
+        assert!(f.statement_execute_before(&ctx).is_ok());
+        f.statement_execute_after(&ctx, 1, 1);
+        f.statement_closed(&ctx);
+        f.statement_error(&ctx, &DruidError::Pool("x".into()));
+        f.resultset_open(&ctx);
+        f.resultset_closed(&ctx, 3);
+        f.data_source_inited(&ctx);
+    }
+
+    #[test]
+    fn test_dyn_filter_debug() {
+        let f: Box<dyn Filter> = Box::new(MinimalFilter);
+        assert!(format!("{:?}", f).contains("MinimalFilter"));
+    }
+}

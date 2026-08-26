@@ -70,4 +70,29 @@ mod tests {
             Err(DruidError::Wall(_))
         ));
     }
+    #[test]
+    fn test_no_sql_passes() {
+        let f = WallFilter::new(WallConfig::default());
+        let c = FilterContext::new("t"); // 无 SQL
+        assert!(f.statement_execute_before(&c).is_ok());
+    }
+    #[test]
+    fn test_deny_message_carried() {
+        let f = WallFilter::new(WallConfig::default());
+        let c = FilterContext::new("t").with_sql("SELECT SLEEP(10)");
+        match f.statement_execute_before(&c) {
+            Err(DruidError::Wall(msg)) => assert!(msg.contains("forbidden")),
+            other => panic!("expected Wall error, got {:?}", other.map(|_| ())),
+        }
+    }
+    #[test]
+    fn test_wall_filter_hit_rate_and_name() {
+        let f = WallFilter::new(WallConfig::default());
+        assert_eq!(f.hit_rate(), 0.0);
+        assert_eq!(f.name(), "wall");
+        let c = FilterContext::new("t").with_sql("SELECT 1");
+        f.statement_execute_before(&c).unwrap();
+        f.statement_execute_before(&c).unwrap(); // 缓存命中
+        assert_eq!(f.hit_rate(), 0.5);
+    }
 }

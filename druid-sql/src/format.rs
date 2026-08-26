@@ -363,4 +363,173 @@ mod tests {
         let reparsed = parse_sql(&formatted);
         assert!(reparsed.is_ok());
     }
+
+    fn fmt(sql: &str) -> String {
+        let stmts = parse_sql(sql).unwrap();
+        assert_eq!(stmts.len(), 1, "expected 1 statement: {sql}");
+        format_statement(&stmts[0])
+    }
+
+    #[test]
+    fn test_format_select_full() {
+        let out = fmt(
+            "SELECT DISTINCT t.a, COUNT(*) AS cnt, b + 1 FROM db.t x \
+             LEFT JOIN u ON x.id = u.id WHERE x.a > 1 AND x.b IS NOT NULL \
+             GROUP BY t.a HAVING COUNT(*) > 2 ORDER BY t.a DESC LIMIT 10",
+        );
+        assert_eq!(
+            out,
+            "SELECT DISTINCT t.a, COUNT(*) AS cnt, b + 1 FROM db.t x \
+             LEFT JOIN u ON x.id = u.id WHERE x.a > 1 AND x.b IS NOT NULL \
+             GROUP BY t.a HAVING COUNT(*) > 2 ORDER BY t.a DESC LIMIT 10"
+        );
+    }
+
+    #[test]
+    fn test_format_wildcard_and_with() {
+        assert_eq!(fmt("SELECT * FROM t"), "SELECT * FROM t");
+        assert_eq!(fmt("SELECT t.* FROM t"), "SELECT t.* FROM t");
+        let out = fmt("WITH x AS (SELECT 1) SELECT * FROM x");
+        assert_eq!(out, "WITH x AS (SELECT 1) SELECT * FROM x");
+    }
+
+    #[test]
+    fn test_format_dml() {
+        assert_eq!(
+            fmt("INSERT INTO t (a, b) VALUES (1, 'x'), (2, NULL)"),
+            "INSERT INTO t (a, b) VALUES (1, 'x'), (2, NULL)"
+        );
+        assert_eq!(
+            fmt("REPLACE INTO t VALUES (1)"),
+            "REPLACE INTO t VALUES (1)"
+        );
+        assert_eq!(
+            fmt("UPDATE t SET a = 1, b = a + 1 WHERE id = 3"),
+            "UPDATE t SET a = 1, b = a + 1 WHERE id = 3"
+        );
+        assert_eq!(
+            fmt("DELETE FROM t WHERE x = 1"),
+            "DELETE FROM t WHERE x = 1"
+        );
+        assert_eq!(fmt("DELETE FROM t"), "DELETE FROM t");
+    }
+
+    #[test]
+    fn test_format_ddl() {
+        assert_eq!(
+            fmt("CREATE TABLE IF NOT EXISTS t (id INT PRIMARY KEY, name VARCHAR(20) NOT NULL)"),
+            "CREATE TABLE IF NOT EXISTS t (id INT, name VARCHAR(20))"
+        );
+        // 格式化后列定义不保留 nullable/primary key 细节 — 验证可重新解析
+        assert!(parse_sql(&fmt("CREATE TABLE IF NOT EXISTS t (id INT PRIMARY KEY)")).is_ok());
+        assert_eq!(
+            fmt("DROP TABLE IF EXISTS t"),
+            "DROP TABLE IF EXISTS t"
+        );
+        assert_eq!(fmt("DROP VIEW v"), "DROP VIEW v");
+        assert_eq!(fmt("DROP INDEX i"), "DROP INDEX i");
+    }
+
+    #[test]
+    fn test_format_expr_constructs() {
+        use crate::ast::*;
+        // 解析器无法产出的节点直接构造 AST 测试格式化
+        let window = SQLExpr::WindowFunction {
+            function: Box::new(SQLExpr::Function {
+                name: "ROW_NUMBER".into(),
+                args: vec![],
+                distinct: false,
+            }),
+            partition_by: vec![SQLExpr::Identifier(vec!["a".into()])],
+            order_by: vec![OrderByExpr {
+                expr: SQLExpr::Identifier(vec!["b".into()]),
+                asc: false,
+            }],
+        };
+        assert_eq!(
+            format_expr(&window),
+            "ROW_NUMBER() OVER (PARTITION BY a ORDER BY b DESC)"
+        );
+
+        assert_eq!(
+            format_expr(&SQLExpr::Cast {
+                expr: Box::new(SQLExpr::Identifier(vec!["x".into()])),
+                data_type: "INT".into(),
+            }),
+            "CAST(x AS INT)"
+        );
+        assert_eq!(
+            format_expr(&SQLExpr::Case {
+                expr: Some(Box::new(SQLExpr::Identifier(vec!["a".into()]))),
+                whens: vec![(
+                    SQLExpr::NumberLiteral("1".into()),
+                    SQLExpr::StringLiteral("one".into())
+                )],
+                else_expr: Some(Box::new(SQLExpr::Null)),
+            }),
+            "CASE a WHEN 1 THEN 'one' ELSE NULL END"
+        );
+        assert_eq!(
+            format_expr(&SQLExpr::UnaryOp {
+                op: UnaryOpType::Not,
+                expr: Box::new(SQLExpr::Identifier(vec!["x".into()])),
+            }),
+            "NOT x"
+        );
+        assert_eq!(format_expr(&SQLExpr::Null), "NULL");
+        assert_eq!(format_expr(&SQLExpr::Placeholder), "?");
+        assert_eq!(format_expr(&SQLExpr::Wildcard), "*");
+        assert_eq!(format_expr(&SQLExpr::NumberLiteral("1.5".into())), "1.5");
+        assert_eq!(format_expr(&SQLExpr::StringLiteral("it's".into())), "'it's'");
+        assert_eq!(
+            format_expr(&SQLExpr::Identifier(vec!["a".into(), "b".into()])),
+            "a.b"
+        );
+    }
+
+    #[test]
+    fn test_format_expr_from_parser() {
+        // 解析器能产出的表达式走一遍完整管道
+        let out = fmt(
+            "SELECT a FROM t \
+             WHERE a BETWEEN 1 AND 2 AND b NOT IN (1, 2) \
+             AND c LIKE 'x%' AND d IS NULL \
+             AND EXISTS (SELECT 1 FROM u WHERE u.a = t.a)",
+        );
+        assert_eq!(
+            out,
+            "SELECT a FROM t WHERE a BETWEEN 1 AND 2 \
+             AND b NOT IN (1, 2) AND c LIKE 'x%' AND d IS NULL \
+             AND EXISTS (SELECT 1 FROM u WHERE u.a = t.a)"
+        );
+        let out2 = fmt("SELECT a FROM t WHERE a IN (SELECT id FROM u)");
+        assert_eq!(out2, "SELECT a FROM t WHERE a IN (SELECT id FROM u)");
+    }
+
+    #[test]
+    fn test_format_roundtrip_all_statements() {
+        let sqls = [
+            "SELECT * FROM t",
+            "SELECT DISTINCT a, b FROM t WHERE a > 1 GROUP BY a HAVING COUNT(*) > 1",
+            "INSERT INTO t (a) VALUES (1)",
+            "UPDATE t SET a = 1",
+            "DELETE FROM t",
+            "CREATE TABLE t (id INT)",
+            "DROP TABLE t",
+            "WITH x AS (SELECT 1) SELECT * FROM x",
+            "SELECT (a + b) * c FROM t",
+        ];
+        for sql in sqls {
+            let stmts = parse_sql(sql).unwrap();
+            let formatted = format_statement(&stmts[0]);
+            let reparsed = parse_sql(&formatted);
+            assert!(reparsed.is_ok(), "roundtrip failed for: {sql} -> {formatted}");
+        }
+    }
+
+    #[test]
+    fn test_format_subquery_in_from() {
+        let out = fmt("SELECT s.a FROM (SELECT a FROM t) s WHERE s.a > 1");
+        assert_eq!(out, "SELECT s.a FROM (SELECT a FROM t) s WHERE s.a > 1");
+    }
 }

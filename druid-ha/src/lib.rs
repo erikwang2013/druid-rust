@@ -56,10 +56,11 @@ impl<D: Driver> HighAvailableDataSource<D> {
 
     /// 添加数据源节点
     pub fn add_node(&mut self, name: &str, ds: DruidDataSource<D>, weight: usize) {
+        // weight 0 会导致 get_datasource 中 total_weight 为 0、取模除零 panic，统一按 1 处理
         let node = Arc::new(HaNode {
             datasource: Arc::new(ds),
             status: Mutex::new(NodeStatus::Active),
-            weight,
+            weight: weight.max(1),
             name: name.to_string(),
         });
         self.nodes.push(node);
@@ -231,13 +232,16 @@ mod tests {
 
     #[derive(Debug)]
     struct MockHaDriver {
-        connect_count: AtomicU64,
+        counter: Arc<AtomicU64>,
     }
     impl MockHaDriver {
         fn new() -> Self {
             MockHaDriver {
-                connect_count: AtomicU64::new(0),
+                counter: Arc::new(AtomicU64::new(0)),
             }
+        }
+        fn with_counter(counter: Arc<AtomicU64>) -> Self {
+            MockHaDriver { counter }
         }
     }
 
@@ -251,7 +255,7 @@ mod tests {
             _: &str,
             _: Option<std::time::Duration>,
         ) -> Result<MockHaConn, DruidError> {
-            let id = self.connect_count.fetch_add(1, Ordering::SeqCst) + 1;
+            let id = self.counter.fetch_add(1, Ordering::SeqCst) + 1;
             Ok(MockHaConn::new(id))
         }
         fn name(&self) -> &'static str {
@@ -260,6 +264,38 @@ mod tests {
         async fn validate(&self, _: &MockHaConn) -> Result<(), DruidError> {
             Ok(())
         }
+    }
+
+    /// 连接总是失败的驱动
+    struct FailingHaDriver;
+
+    #[async_trait::async_trait]
+    impl Driver for FailingHaDriver {
+        type Connection = MockHaConn;
+        async fn connect(
+            &self,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: Option<std::time::Duration>,
+        ) -> Result<MockHaConn, DruidError> {
+            Err(DruidError::Database("backend down".into()))
+        }
+        fn name(&self) -> &'static str {
+            "FailingHaDriver"
+        }
+        async fn validate(&self, _: &MockHaConn) -> Result<(), DruidError> {
+            Ok(())
+        }
+    }
+
+    fn ha_cfg(url: &str) -> druid_core::DruidConfig {
+        let mut c = druid_core::DruidConfig::new(url, "u", "p");
+        c.initial_size = 0;
+        c.max_active = 4;
+        c.test_on_borrow = false;
+        c.time_between_eviction_runs_ms = 0;
+        c
     }
 
     #[tokio::test]
@@ -310,5 +346,87 @@ mod tests {
         ha.mark_down("node-x");
         ha.mark_up("node-x");
         assert_eq!(ha.node_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_ha_no_active_node_returns_error() {
+        let ha = HighAvailableDataSource::<MockHaDriver>::new();
+        let err = ha.get_datasource().await.err().unwrap();
+        assert!(err.to_string().contains("no active"));
+        assert_eq!(ha.active_count(), 0);
+        assert!(ha.node_names().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_ha_weighted_round_robin_distribution() {
+        let c1 = Arc::new(AtomicU64::new(0));
+        let c2 = Arc::new(AtomicU64::new(0));
+        let mut ha = HighAvailableDataSource::new();
+        let ds1 = DruidDataSource::new(MockHaDriver::with_counter(c1.clone()), ha_cfg("mock://n1"));
+        let ds2 = DruidDataSource::new(MockHaDriver::with_counter(c2.clone()), ha_cfg("mock://n2"));
+        ds1.init().await.unwrap();
+        ds2.init().await.unwrap();
+        ha.add_node("a", ds1, 2);
+        ha.add_node("b", ds2, 1);
+        assert_eq!(ha.node_names(), vec!["a", "b"]);
+
+        // 权重 2:1，6 次借用 → a 4 次、b 2 次（借用期间保持 guard 不归还，强制新建连接）
+        let mut guards: Vec<_> = Vec::new();
+        for _ in 0..6 {
+            let ds = ha.get_datasource().await.unwrap();
+            guards.push(ds.get_connection().await.unwrap());
+        }
+        assert_eq!(c1.load(Ordering::SeqCst), 4);
+        assert_eq!(c2.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn test_ha_zero_weight_no_panic() {
+        let mut ha = HighAvailableDataSource::new();
+        let ds = DruidDataSource::new(MockHaDriver::new(), ha_cfg("mock://n1"));
+        ds.init().await.unwrap();
+        ha.add_node("only", ds, 0); // 修复前：total_weight=0 取模除零 panic
+        let ds = ha.get_datasource().await.unwrap();
+        let _g = ds.get_connection().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_ha_health_check_recovers_down_node() {
+        let mut ha = HighAvailableDataSource::new();
+        let ds = DruidDataSource::new(MockHaDriver::new(), ha_cfg("mock://n1"));
+        ds.init().await.unwrap();
+        ha.add_node("n1", ds, 1);
+        ha.mark_down("n1");
+        assert_eq!(ha.active_count(), 0);
+
+        let ha = Arc::new(ha);
+        ha.run_health_check().await; // Down → Testing → 成功 → Active
+        assert_eq!(ha.active_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_ha_health_check_keeps_down_node_down() {
+        let mut ha = HighAvailableDataSource::new();
+        let ds = DruidDataSource::new(FailingHaDriver, ha_cfg("mock://n1"));
+        ds.init().await.unwrap();
+        ha.add_node("n1", ds, 1);
+        ha.mark_down("n1");
+
+        let ha = Arc::new(ha);
+        ha.run_health_check().await; // 探测失败 → 保持 Down
+        assert_eq!(ha.active_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_ha_health_check_marks_failing_active_down() {
+        let mut ha = HighAvailableDataSource::new();
+        let ds = DruidDataSource::new(FailingHaDriver, ha_cfg("mock://n1"));
+        ds.init().await.unwrap();
+        ha.add_node("n1", ds, 1);
+        assert_eq!(ha.active_count(), 1);
+
+        let ha = Arc::new(ha);
+        ha.run_health_check().await; // 活跃节点健康检查失败 → 标记 Down
+        assert_eq!(ha.active_count(), 0);
     }
 }

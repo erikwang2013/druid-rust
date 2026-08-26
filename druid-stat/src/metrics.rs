@@ -36,7 +36,10 @@ impl PoolMetrics {
         self.waiting_count.fetch_add(1, Ordering::Relaxed);
     }
     pub fn dec_waiting(&self) {
-        self.waiting_count.fetch_sub(1, Ordering::Relaxed);
+        // saturating：多余的解等待计数不会把计数回绕成 u64::MAX
+        let _ = self
+            .waiting_count
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| Some(v.saturating_sub(1)));
     }
     pub fn inc_borrow(&self) {
         self.borrow_count.fetch_add(1, Ordering::Relaxed);
@@ -84,5 +87,65 @@ impl PoolMetrics {
         } else {
             self.total_wait_ns.load(Ordering::Relaxed) as f64 / count as f64 / 1_000_000.0
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_initial_state() {
+        let m = PoolMetrics::new();
+        assert_eq!(m.active(), 0);
+        assert_eq!(m.idle(), 0);
+        assert_eq!(m.waiting(), 0);
+        assert_eq!(m.borrow_count(), 0);
+        assert_eq!(m.create_count(), 0);
+        assert_eq!(m.destroy_count(), 0);
+        assert_eq!(m.cache_hit_count(), 0);
+        assert_eq!(m.avg_wait_ms(), 0.0);
+    }
+
+    #[test]
+    fn test_setters_and_counters() {
+        let m = PoolMetrics::new();
+        m.set_active(3);
+        m.set_idle(5);
+        assert_eq!(m.active(), 3);
+        assert_eq!(m.idle(), 5);
+
+        m.inc_waiting();
+        m.inc_waiting();
+        m.dec_waiting();
+        assert_eq!(m.waiting(), 1);
+
+        m.inc_borrow();
+        m.inc_cache_hit();
+        m.inc_create();
+        m.inc_destroy();
+        assert_eq!(m.borrow_count(), 1);
+        assert_eq!(m.cache_hit_count(), 1);
+        assert_eq!(m.create_count(), 1);
+        assert_eq!(m.destroy_count(), 1);
+    }
+
+    #[test]
+    fn test_avg_wait_ms() {
+        let m = PoolMetrics::new();
+        // 2 次借用，共 2ms 等待 → 平均 1ms
+        m.inc_borrow();
+        m.inc_borrow();
+        m.add_wait_time_ns(1_500_000);
+        m.add_wait_time_ns(500_000);
+        assert!((m.avg_wait_ms() - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_dec_waiting_does_not_underflow() {
+        let m = PoolMetrics::new();
+        m.dec_waiting(); // 0 - 1 不再回绕
+        m.dec_waiting();
+        assert_eq!(m.waiting(), 0);
     }
 }

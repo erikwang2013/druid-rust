@@ -217,12 +217,21 @@ impl Parser {
                 let alias = if self.current == Token::As {
                     self.advance();
                     Some(self.parse_ident()?)
-                } else if matches!(&self.current, Token::Ident(_)) {
+                } else if matches!(&self.current, Token::Ident(_) | Token::QuotedIdent(_)) {
                     Some(self.parse_ident()?)
                 } else {
                     None
                 };
                 SelectItem::Expr(expr, alias)
+            };
+            // 还原 t.* 为带表限定的通配符
+            let item = match item {
+                SelectItem::Expr(SQLExpr::Identifier(parts), None)
+                    if parts.len() == 2 && parts[1] == "*" =>
+                {
+                    SelectItem::Wildcard(Some(parts[0].clone()))
+                }
+                other => other,
             };
             items.push(item);
             if self.current == Token::Comma {
@@ -255,7 +264,7 @@ impl Parser {
             self.advance();
             let schema = Some(name);
             name = self.parse_ident()?;
-            let alias = if matches!(&self.current, Token::Ident(_)) {
+            let alias = if matches!(&self.current, Token::Ident(_) | Token::QuotedIdent(_)) {
                 Some(self.parse_ident()?)
             } else {
                 None
@@ -266,7 +275,9 @@ impl Parser {
                 schema,
             })
         } else {
-            let alias = if matches!(&self.current, Token::Ident(_)) && self.current != Token::As {
+            let alias = if matches!(&self.current, Token::Ident(_) | Token::QuotedIdent(_))
+                && self.current != Token::As
+            {
                 Some(self.parse_ident()?)
             } else if self.current == Token::As {
                 self.advance();
@@ -441,20 +452,30 @@ impl Parser {
                 Token::In => {
                     self.advance();
                     self.expect(Token::LParen)?;
-                    let mut items = Vec::new();
-                    loop {
-                        items.push(self.parse_expr()?);
-                        if self.current == Token::Comma {
-                            self.advance();
-                        } else {
-                            break;
+                    left = if self.current == Token::Select {
+                        let sub = self.parse_select()?;
+                        self.expect(Token::RParen)?;
+                        SQLExpr::InSubQuery {
+                            expr: Box::new(left),
+                            query: Box::new(SQLStatement::Select(Box::new(sub))),
+                            not: true,
                         }
-                    }
-                    self.expect(Token::RParen)?;
-                    left = SQLExpr::InList {
-                        expr: Box::new(left),
-                        list: items,
-                        not: true,
+                    } else {
+                        let mut items = Vec::new();
+                        loop {
+                            items.push(self.parse_expr()?);
+                            if self.current == Token::Comma {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                        self.expect(Token::RParen)?;
+                        SQLExpr::InList {
+                            expr: Box::new(left),
+                            list: items,
+                            not: true,
+                        }
                     };
                 }
                 Token::Like => {
@@ -495,20 +516,30 @@ impl Parser {
         if self.current == Token::In {
             self.advance();
             self.expect(Token::LParen)?;
-            let mut items = Vec::new();
-            loop {
-                items.push(self.parse_expr()?);
-                if self.current == Token::Comma {
-                    self.advance();
-                } else {
-                    break;
+            left = if self.current == Token::Select {
+                let sub = self.parse_select()?;
+                self.expect(Token::RParen)?;
+                SQLExpr::InSubQuery {
+                    expr: Box::new(left),
+                    query: Box::new(SQLStatement::Select(Box::new(sub))),
+                    not: false,
                 }
-            }
-            self.expect(Token::RParen)?;
-            left = SQLExpr::InList {
-                expr: Box::new(left),
-                list: items,
-                not: false,
+            } else {
+                let mut items = Vec::new();
+                loop {
+                    items.push(self.parse_expr()?);
+                    if self.current == Token::Comma {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                self.expect(Token::RParen)?;
+                SQLExpr::InList {
+                    expr: Box::new(left),
+                    list: items,
+                    not: false,
+                }
             };
         }
         Ok(left)
@@ -562,8 +593,14 @@ impl Parser {
                 // 可能是 table.column 或函数调用
                 if self.current == Token::Dot {
                     self.advance();
-                    let col = self.parse_ident()?;
-                    Ok(SQLExpr::Identifier(vec![name, col]))
+                    if self.current == Token::Mul {
+                        // t.* — parse_select_items 会还原为 SelectItem::Wildcard(Some)
+                        self.advance();
+                        Ok(SQLExpr::Identifier(vec![name, "*".to_string()]))
+                    } else {
+                        let col = self.parse_ident()?;
+                        Ok(SQLExpr::Identifier(vec![name, col]))
+                    }
                 } else if self.current == Token::LParen {
                     // 函数调用
                     self.advance();
@@ -589,6 +626,17 @@ impl Parser {
                         args,
                         distinct,
                     })
+                } else {
+                    Ok(SQLExpr::Identifier(vec![name]))
+                }
+            }
+            Token::QuotedIdent(name) => {
+                let name = name.clone();
+                self.advance();
+                if self.current == Token::Dot {
+                    self.advance();
+                    let col = self.parse_ident()?;
+                    Ok(SQLExpr::Identifier(vec![name, col]))
                 } else {
                     Ok(SQLExpr::Identifier(vec![name]))
                 }
@@ -1048,4 +1096,421 @@ pub fn parse_sql(sql: &str) -> ParseResult<Vec<SQLStatement>> {
         }
     }
     Ok(stmts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn first(sql: &str) -> SQLStatement {
+        let stmts = parse_sql(sql).unwrap();
+        assert_eq!(stmts.len(), 1, "expected 1 statement for: {sql}");
+        stmts.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn test_empty_and_blank_sql() {
+        assert_eq!(parse_sql("").unwrap(), vec![]);
+        assert_eq!(parse_sql("  \t\n").unwrap(), vec![]);
+        assert_eq!(parse_sql(";").unwrap(), vec![]);
+        assert_eq!(parse_sql("; ; -- x\n").unwrap(), vec![]);
+        assert_eq!(parse_sql("-- only comment").unwrap(), vec![]);
+    }
+
+    #[test]
+    fn test_select_basic_structure() {
+        let stmt = first("SELECT id, name AS n FROM users WHERE age > 18");
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        assert!(!s.distinct);
+        assert_eq!(s.columns.len(), 2);
+        assert_eq!(
+            s.columns[0],
+            SelectItem::Expr(SQLExpr::Identifier(vec!["id".into()]), None)
+        );
+        assert_eq!(
+            s.columns[1],
+            SelectItem::Expr(
+                SQLExpr::Identifier(vec!["name".into()]),
+                Some("n".into())
+            )
+        );
+        let TableReference::Table { name, schema, .. } = s.from.as_ref().unwrap() else {
+            panic!("not table")
+        };
+        assert_eq!(name, "users");
+        assert!(schema.is_none());
+        let Some(SQLExpr::BinaryOp { op, .. }) = &s.where_clause else {
+            panic!("no where")
+        };
+        assert_eq!(*op, BinaryOpType::Gt);
+    }
+
+    #[test]
+    fn test_select_all_clauses() {
+        let stmt = first(
+            "SELECT DISTINCT t.a, COUNT(*) FROM t \
+             WHERE x > 1 GROUP BY t.a HAVING COUNT(*) > 1 \
+             ORDER BY t.a DESC, b LIMIT 10 OFFSET 5",
+        );
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        assert!(s.distinct);
+        assert_eq!(
+            s.columns[1],
+            SelectItem::Expr(
+                SQLExpr::Aggregate {
+                    name: "COUNT".into(),
+                    expr: Box::new(SQLExpr::Wildcard),
+                },
+                None
+            )
+        );
+        assert_eq!(s.group_by.len(), 1);
+        assert!(s.having.is_some());
+        assert_eq!(s.order_by.len(), 2);
+        assert!(!s.order_by[0].asc);
+        assert!(s.order_by[1].asc);
+        assert_eq!(s.limit, Some(SQLExpr::NumberLiteral("10".into())));
+        assert_eq!(s.offset, Some(SQLExpr::NumberLiteral("5".into())));
+    }
+
+    #[test]
+    fn test_select_joins() {
+        let stmt = first(
+            "SELECT * FROM a LEFT JOIN b ON a.id = b.id \
+             INNER JOIN c ON c.aid = a.id RIGHT OUTER JOIN d ON d.x = c.x \
+             CROSS JOIN e ON e.x = a.x JOIN f ON f.a = a.id",
+        );
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        assert_eq!(s.columns[0], SelectItem::Wildcard(None));
+        assert_eq!(s.joins.len(), 5);
+        assert_eq!(s.joins[0].join_type, JoinType::Left);
+        assert_eq!(s.joins[1].join_type, JoinType::Inner);
+        assert_eq!(s.joins[2].join_type, JoinType::Right);
+        assert_eq!(s.joins[3].join_type, JoinType::Cross);
+        assert_eq!(s.joins[4].join_type, JoinType::Inner);
+        // 所有 join（含 CROSS）都要求 ON 子句
+        let TableReference::Table { name, .. } = &s.joins[4].table else {
+            panic!("not table")
+        };
+        assert_eq!(name, "f");
+    }
+
+    #[test]
+    fn test_select_table_alias_and_schema() {
+        let stmt = first("SELECT u.id FROM db.users u WHERE u.id = 1");
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let TableReference::Table { name, alias, schema } = s.from.as_ref().unwrap() else {
+            panic!("not table")
+        };
+        assert_eq!(name, "users");
+        assert_eq!(alias.as_deref(), Some("u"));
+        assert_eq!(schema.as_deref(), Some("db"));
+        assert_eq!(
+            s.columns[0],
+            SelectItem::Expr(SQLExpr::Identifier(vec!["u".into(), "id".into()]), None)
+        );
+    }
+
+    #[test]
+    fn test_insert_and_replace() {
+        let SQLStatement::Insert(ins) =
+            first("INSERT INTO t (a, b) VALUES (1, 'x'), (2, NULL)")
+        else {
+            panic!("not insert")
+        };
+        assert!(!ins.is_replace);
+        assert_eq!(ins.table, "t");
+        assert_eq!(ins.columns, vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(ins.values.len(), 2);
+        assert_eq!(ins.values[1][1], SQLExpr::Null);
+
+        let SQLStatement::Insert(rep) = first("REPLACE INTO t VALUES (1)") else {
+            panic!("not replace")
+        };
+        assert!(rep.is_replace);
+        assert!(rep.columns.is_empty());
+        assert_eq!(rep.values.len(), 1);
+    }
+
+    #[test]
+    fn test_update_delete() {
+        let SQLStatement::Update(up) =
+            first("UPDATE t SET a = 1, b = a + 1 WHERE id = 3")
+        else {
+            panic!("not update")
+        };
+        assert_eq!(up.table, "t");
+        assert_eq!(up.sets.len(), 2);
+        assert_eq!(up.sets[0].0, "a");
+        assert_eq!(
+            up.sets[1].1,
+            SQLExpr::BinaryOp {
+                left: Box::new(SQLExpr::Identifier(vec!["a".into()])),
+                op: BinaryOpType::Plus,
+                right: Box::new(SQLExpr::NumberLiteral("1".into())),
+            }
+        );
+        assert!(up.where_clause.is_some());
+
+        let SQLStatement::Delete(del) = first("DELETE FROM t WHERE x = 1") else {
+            panic!("not delete")
+        };
+        assert_eq!(del.table, "t");
+        assert!(del.where_clause.is_some());
+
+        let SQLStatement::Delete(del2) = first("DELETE FROM t") else {
+            panic!("not delete")
+        };
+        assert!(del2.where_clause.is_none());
+    }
+
+    #[test]
+    fn test_create_table() {
+        let SQLStatement::CreateTable(ct) = first(
+            "CREATE TABLE IF NOT EXISTS t (\
+             id INT PRIMARY KEY, \
+             name VARCHAR(20) NOT NULL DEFAULT 'x', \
+             age INT NULL, \
+             price DECIMAL(10, 2))",
+        ) else {
+            panic!("not create")
+        };
+        assert!(ct.if_not_exists);
+        assert_eq!(ct.table, "t");
+        assert_eq!(ct.columns.len(), 4);
+        assert_eq!(ct.columns[0].name, "id");
+        assert_eq!(ct.columns[0].data_type, "INT");
+        assert!(ct.columns[0].is_primary_key);
+        assert_eq!(ct.columns[1].data_type, "VARCHAR(20)");
+        assert!(!ct.columns[1].nullable);
+        assert_eq!(
+            ct.columns[1].default_value,
+            Some(SQLExpr::StringLiteral("x".into()))
+        );
+        assert!(ct.columns[2].nullable);
+        assert_eq!(ct.columns[3].data_type, "DECIMAL(10, 2)");
+    }
+
+    #[test]
+    fn test_drop_variants() {
+        let stmts = parse_sql("DROP TABLE IF EXISTS t; DROP VIEW v; DROP INDEX i").unwrap();
+        assert_eq!(stmts.len(), 3);
+        let SQLStatement::DropObject(d1) = &stmts[0] else { panic!() };
+        assert_eq!(d1.object_type, DropObjectType::Table);
+        assert!(d1.if_exists);
+        assert_eq!(d1.name, "t");
+        let SQLStatement::DropObject(d2) = &stmts[1] else { panic!() };
+        assert_eq!(d2.object_type, DropObjectType::View);
+        let SQLStatement::DropObject(d3) = &stmts[2] else { panic!() };
+        assert_eq!(d3.object_type, DropObjectType::Index);
+        assert!(!d3.if_exists);
+    }
+
+    #[test]
+    fn test_with_cte() {
+        let stmt = first("WITH x AS (SELECT 1), y (a, b) AS (SELECT 1, 2) SELECT * FROM x");
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        assert_eq!(s.with_cte.len(), 2);
+        assert_eq!(s.with_cte[0].name, "x");
+        assert!(s.with_cte[0].columns.is_empty());
+        assert_eq!(s.with_cte[1].name, "y");
+        assert_eq!(s.with_cte[1].columns, vec!["a".to_string(), "b".to_string()]);
+        let TableReference::Table { name, .. } = s.from.as_ref().unwrap() else {
+            panic!()
+        };
+        assert_eq!(name, "x");
+    }
+
+    #[test]
+    fn test_case_expression() {
+        let stmt = first(
+            "SELECT CASE WHEN a > 1 THEN 'big' WHEN a < 0 THEN 'neg' ELSE 'small' END \
+             AS size FROM t",
+        );
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let SelectItem::Expr(SQLExpr::Case { expr, whens, else_expr }, alias) = &s.columns[0]
+        else {
+            panic!("not case")
+        };
+        assert!(expr.is_none()); // 无 base expr 的 searched CASE
+        assert_eq!(whens.len(), 2);
+        assert!(else_expr.is_some());
+        assert_eq!(alias.as_deref(), Some("size"));
+    }
+
+    #[test]
+    fn test_between_in_exists_and_not() {
+        let stmt = first(
+            "SELECT * FROM t \
+             WHERE a BETWEEN 1 AND 2 \
+             AND b NOT IN (1, 2, 3) \
+             AND c NOT LIKE 'x%' \
+             AND d IS NOT NULL \
+             AND EXISTS (SELECT 1 FROM u WHERE u.id = t.id)",
+        );
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        // 顶层是 AND 链，逐层解包
+        let mut found_between = false;
+        let mut found_in = false;
+        let mut found_not_like = false;
+        let mut found_is_null = false;
+        let mut found_exists = false;
+        fn walk(e: &SQLExpr, f: &mut impl FnMut(&SQLExpr)) {
+            f(e);
+            if let SQLExpr::BinaryOp { left, right, .. } = e {
+                walk(left, f);
+                walk(right, f);
+            }
+        }
+        let Some(wc) = &s.where_clause else { panic!("no where") };
+        walk(wc, &mut |e| {
+            match e {
+                SQLExpr::Between { not, .. } => found_between = !*not,
+                SQLExpr::InList { not, .. } => found_in = *not,
+                SQLExpr::Like { not, .. } => found_not_like = *not,
+                SQLExpr::IsNull { not, .. } => found_is_null = *not,
+                SQLExpr::Exists(..) => found_exists = true,
+                _ => {}
+            }
+        });
+        assert!(found_between && found_in && found_not_like && found_is_null && found_exists);
+    }
+
+    #[test]
+    fn test_subquery_and_nested() {
+        let stmt = first("SELECT (a + b) * c FROM t WHERE id IN (SELECT uid FROM u)");
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let SelectItem::Expr(e, _) = &s.columns[0] else { panic!() };
+        let SQLExpr::BinaryOp { op, .. } = e else { panic!("not binary") };
+        assert_eq!(*op, BinaryOpType::Mul);
+        let Some(SQLExpr::InSubQuery { expr, query, not }) = &s.where_clause else {
+            panic!("not in-subquery")
+        };
+        assert!(!not);
+        assert_eq!(
+            **expr,
+            SQLExpr::Identifier(vec!["id".into()])
+        );
+        let SQLStatement::Select(q) = query.as_ref() else { panic!() };
+        assert_eq!(q.columns.len(), 1);
+    }
+
+    #[test]
+    fn test_subquery_in_from() {
+        let stmt = first("SELECT s.a FROM (SELECT a FROM t) s WHERE s.a > 1");
+        let SQLStatement::Select(outer) = stmt else { panic!("not select") };
+        let TableReference::SubQuery(inner, alias) = outer.from.as_ref().unwrap() else {
+            panic!("not subquery")
+        };
+        assert_eq!(alias, "s");
+        let SQLStatement::Select(q) = inner.as_ref() else { panic!() };
+        assert_eq!(q.columns.len(), 1);
+        assert_eq!(
+            q.columns[0],
+            SelectItem::Expr(SQLExpr::Identifier(vec!["a".into()]), None)
+        );
+    }
+
+    #[test]
+    fn test_function_and_unary() {
+        let stmt = first("SELECT COALESCE(a, 0), -x, NOT y FROM t WHERE NOT EXISTS (SELECT 1)");
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        assert_eq!(
+            s.columns[0],
+            SelectItem::Expr(
+                SQLExpr::Function {
+                    name: "COALESCE".into(),
+                    args: vec![
+                        SQLExpr::Identifier(vec!["a".into()]),
+                        SQLExpr::NumberLiteral("0".into()),
+                    ],
+                    distinct: false,
+                },
+                None
+            )
+        );
+        assert_eq!(
+            s.columns[1],
+            SelectItem::Expr(
+                SQLExpr::UnaryOp {
+                    op: UnaryOpType::Neg,
+                    expr: Box::new(SQLExpr::Identifier(vec!["x".into()])),
+                },
+                None
+            )
+        );
+    }
+
+    #[test]
+    fn test_quoted_identifiers_in_expr() {
+        let stmt = first(r#"SELECT "col", t."x", 1 AS "one" FROM "t" "al""#);
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        assert_eq!(
+            s.columns[0],
+            SelectItem::Expr(SQLExpr::Identifier(vec!["col".into()]), None)
+        );
+        assert_eq!(
+            s.columns[1],
+            SelectItem::Expr(SQLExpr::Identifier(vec!["t".into(), "x".into()]), None)
+        );
+        assert_eq!(s.columns[2], SelectItem::Expr(SQLExpr::NumberLiteral("1".into()), Some("one".into())));
+        let TableReference::Table { name, alias, .. } = s.from.as_ref().unwrap() else {
+            panic!("not table")
+        };
+        assert_eq!(name, "t");
+        assert_eq!(alias.as_deref(), Some("al"));
+    }
+
+    #[test]
+    fn test_string_literal_escapes_in_sql() {
+        let stmt = first(r#"SELECT 'it''s', 'a\'b'"#);
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        assert_eq!(
+            s.columns[0],
+            SelectItem::Expr(SQLExpr::StringLiteral("it's".into()), None)
+        );
+        assert_eq!(
+            s.columns[1],
+            SelectItem::Expr(SQLExpr::StringLiteral("a'b".into()), None)
+        );
+    }
+
+    #[test]
+    fn test_multi_statement_with_comments() {
+        let stmts = parse_sql("SELECT 1; -- comment\nUPDATE t SET a = 2; DELETE FROM t").unwrap();
+        assert_eq!(stmts.len(), 3);
+        assert!(matches!(stmts[0], SQLStatement::Select(_)));
+        assert!(matches!(stmts[1], SQLStatement::Update(_)));
+        assert!(matches!(stmts[2], SQLStatement::Delete(_)));
+    }
+
+    #[test]
+    fn test_placeholder() {
+        let stmt = first("SELECT * FROM t WHERE a = ? AND b IN (?, ?)");
+        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let Some(SQLExpr::BinaryOp { .. }) = &s.where_clause else { panic!() };
+        let sql = crate::format::format_statement(&SQLStatement::Select(s));
+        assert!(sql.contains("?"));
+    }
+
+    #[test]
+    fn test_parse_errors() {
+        assert!(parse_sql("").is_ok());
+        // 空 SELECT 无列
+        assert!(parse_sql("SELECT").is_err());
+        // 缺表名
+        assert!(parse_sql("SELECT * FROM").is_err());
+        // 缺 INTO
+        assert!(parse_sql("INSERT t VALUES (1)").is_err());
+        // 缺 SET
+        assert!(parse_sql("UPDATE t a = 1").is_err());
+        // 未知关键字
+        assert!(parse_sql("FOO BAR").is_err());
+        // 未闭合括号
+        assert!(parse_sql("SELECT (1").is_err());
+        // 括号后多余 token
+        assert!(parse_sql("SELECT 1)").is_err());
+        // CTE 缺 AS
+        assert!(parse_sql("WITH x (SELECT 1) SELECT * FROM x").is_err());
+    }
 }

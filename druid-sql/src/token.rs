@@ -206,6 +206,61 @@ impl Token {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lookup_keyword_case_insensitive() {
+        assert_eq!(lookup_keyword("SELECT"), Some(Token::Select));
+        assert_eq!(lookup_keyword("select"), Some(Token::Select));
+        assert_eq!(lookup_keyword("SeLeCt"), Some(Token::Select));
+        assert_eq!(lookup_keyword("ORDER"), Some(Token::Order));
+        assert_eq!(lookup_keyword("GROUP"), Some(Token::Group));
+        assert_eq!(lookup_keyword("foo"), None);
+        assert_eq!(lookup_keyword(""), None);
+    }
+
+    #[test]
+    fn test_lookup_keyword_type_aliases() {
+        assert_eq!(lookup_keyword("INT"), Some(Token::Int));
+        assert_eq!(lookup_keyword("integer"), Some(Token::Int));
+        assert_eq!(lookup_keyword("VARCHAR"), Some(Token::VarChar));
+        assert_eq!(lookup_keyword("numeric"), Some(Token::Decimal));
+        assert_eq!(lookup_keyword("bool"), Some(Token::Boolean));
+        assert_eq!(lookup_keyword("character"), Some(Token::Char));
+        assert_eq!(lookup_keyword("jsonb"), Some(Token::Jsonb));
+    }
+
+    #[test]
+    fn test_as_type_name() {
+        assert_eq!(Token::Int.as_type_name(), "INT");
+        assert_eq!(Token::VarChar.as_type_name(), "VARCHAR");
+        assert_eq!(Token::Decimal.as_type_name(), "DECIMAL");
+        assert_eq!(Token::Timestamp.as_type_name(), "TIMESTAMP");
+        assert_eq!(Token::Uuid.as_type_name(), "UUID");
+        assert_eq!(Token::Bytea.as_type_name(), "BYTEA");
+        assert_eq!(Token::Select.as_type_name(), "UNKNOWN");
+    }
+
+    #[test]
+    fn test_token_display() {
+        assert_eq!(format!("{}", Token::Ident("abc".into())), "abc");
+        assert_eq!(format!("{}", Token::QuotedIdent("x".into())), "\"x\"");
+        assert_eq!(format!("{}", Token::StringLit("it's".into())), "'it's'");
+        assert_eq!(format!("{}", Token::Number("3.14".into())), "3.14");
+        assert_eq!(format!("{}", Token::Placeholder), "?");
+        assert_eq!(format!("{}", Token::Neq), "<>");
+        assert_eq!(format!("{}", Token::Concat), "||");
+        // DoubleColon 无显式 Display 分支，走 Debug 兜底
+        assert_eq!(format!("{}", Token::DoubleColon), "DOUBLECOLON");
+        assert_eq!(format!("{}", Token::Eof), "<EOF>");
+        assert_eq!(format!("{}", Token::Select), "SELECT");
+        assert_eq!(format!("{}", Token::Left), "LEFT");
+        assert_eq!(format!("{}", Token::Comment("c".into())), "COMMENT(\"C\")");
+    }
+}
+
 pub fn lookup_keyword(word: &str) -> Option<Token> {
     Some(match word.to_ascii_lowercase().as_str() {
         "select" => Token::Select,

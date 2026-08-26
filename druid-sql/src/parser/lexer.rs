@@ -73,7 +73,12 @@ impl Lexer {
             if c == '\\' {
                 s.push(self.advance().unwrap_or('\\'));
             } else if c == quote {
-                break;
+                if self.peek() == Some(quote) {
+                    self.advance();
+                    s.push(quote);
+                } else {
+                    break;
+                }
             } else {
                 s.push(c);
             }
@@ -302,5 +307,159 @@ mod tests {
     fn test_comment_skip() {
         let tokens = tokenize("SELECT 1 -- inline comment\nSELECT 2");
         assert_eq!(tokens.iter().filter(|t| **t == Token::Select).count(), 2);
+    }
+
+    #[test]
+    fn test_empty_and_whitespace() {
+        assert_eq!(tokenize(""), vec![Token::Eof]);
+        assert_eq!(tokenize("  \t\n\r "), vec![Token::Eof]);
+    }
+
+    #[test]
+    fn test_numbers() {
+        assert_eq!(tokenize("123"), vec![Token::Number("123".into()), Token::Eof]);
+        assert_eq!(
+            tokenize("3.14"),
+            vec![Token::Number("3.14".into()), Token::Eof]
+        );
+        assert_eq!(tokenize(".5"), vec![Token::Number(".5".into()), Token::Eof]);
+        // 两个点只吞第一个，剩余部分以 . 开头重新读成小数
+        assert_eq!(
+            tokenize("1.2.3"),
+            vec![
+                Token::Number("1.2".into()),
+                Token::Number(".3".into()),
+                Token::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_operators() {
+        assert_eq!(
+            tokenize("<= >= <> < > = + - * / % ||"),
+            vec![
+                Token::Leq,
+                Token::Geq,
+                Token::Neq,
+                Token::Lt,
+                Token::Gt,
+                Token::Eq,
+                Token::Plus,
+                Token::Minus,
+                Token::Mul,
+                Token::Div,
+                Token::Mod,
+                Token::Concat,
+                Token::Eof
+            ]
+        );
+            assert_eq!(
+            tokenize("-> :: :="),
+            vec![Token::Arrow, Token::DoubleColon, Token::Assign, Token::Eof]
+        );
+    }
+
+    #[test]
+    fn test_quoted_ident_doubled_quote() {
+        assert_eq!(
+            tokenize("\"a\"\"b\""),
+            vec![Token::QuotedIdent("a\"b".into()), Token::Eof]
+        );
+        assert_eq!(
+            tokenize("`weird`"),
+            vec![Token::QuotedIdent("weird".into()), Token::Eof]
+        );
+    }
+
+    #[test]
+    fn test_string_escapes() {
+        // 反斜杠转义
+        assert_eq!(
+            tokenize(r"'it\'s'"),
+            vec![Token::StringLit("it's".into()), Token::Eof]
+        );
+        // SQL 标准双写引号转义
+        assert_eq!(
+            tokenize("'it''s'"),
+            vec![Token::StringLit("it's".into()), Token::Eof]
+        );
+        // 空字符串
+        assert_eq!(
+            tokenize("''"),
+            vec![Token::StringLit("".into()), Token::Eof]
+        );
+        // N'...' 前缀
+        assert_eq!(
+            tokenize("N'abc'"),
+            vec![Token::StringLit("abc".into()), Token::Eof]
+        );
+        // X'...' 十六进制
+        assert_eq!(
+            tokenize("X'AB01'"),
+            vec![Token::HexString("AB01".into()), Token::Eof]
+        );
+        // 未闭合字符串不 panic，吞到末尾
+        assert_eq!(
+            tokenize("'abc"),
+            vec![Token::StringLit("abc".into()), Token::Eof]
+        );
+    }
+
+    #[test]
+    fn test_comments() {
+        assert_eq!(
+            tokenize("-- hi\nSELECT 1"),
+            vec![
+                Token::Comment(" hi".into()),
+                Token::Select,
+                Token::Number("1".into()),
+                Token::Eof
+            ]
+        );
+        // 块注释（含嵌套）
+        assert_eq!(
+            tokenize("/* a /* b */ c */ SELECT 1"),
+            vec![
+                Token::BlockComment(" a /* b */ c ".into()),
+                Token::Select,
+                Token::Number("1".into()),
+                Token::Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn test_misc_tokens() {
+        assert_eq!(
+            tokenize("a_b1 ? ; ( ) [ ] , ."),
+            vec![
+                Token::Ident("a_b1".into()),
+                Token::Placeholder,
+                Token::Semicolon,
+                Token::LParen,
+                Token::RParen,
+                Token::LBracket,
+                Token::RBracket,
+                Token::Comma,
+                Token::Dot,
+                Token::Eof
+            ]
+        );
+        // 关键字大小写不敏感
+        assert_eq!(
+            tokenize("sElEcT FrOm"),
+            vec![Token::Select, Token::From, Token::Eof]
+        );
+    }
+
+    #[test]
+    fn test_next_token_sequential() {
+        // 逐 token 读取与 tokenize 一致
+        let mut l = Lexer::new("SELECT 1");
+        assert_eq!(l.next_token(), Token::Select);
+        assert_eq!(l.next_token(), Token::Number("1".into()));
+        assert_eq!(l.next_token(), Token::Eof);
+        assert_eq!(l.next_token(), Token::Eof); // Eof 后仍返回 Eof
     }
 }
