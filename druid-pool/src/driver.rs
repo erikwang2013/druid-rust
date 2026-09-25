@@ -97,13 +97,19 @@ mod tests {
     #[tokio::test]
     async fn test_driver_connection_contract() {
         let driver = MockDriver;
-        let conn = driver.connect("url", "u", "p", Some(Duration::from_secs(1))).await.unwrap();
+        let conn = driver
+            .connect("url", "u", "p", Some(Duration::from_secs(1)))
+            .await
+            .unwrap();
         assert_eq!(driver.name(), "MockDriver");
         assert_eq!(conn.connection_id(), 42);
         assert!(driver.validate(&conn).await.is_ok());
         assert!(conn.ping().await.is_ok());
         assert_eq!(conn.execute("SELECT 1").await.unwrap(), 7);
-        assert_eq!(conn.query("SELECT 1").await.unwrap(), vec![vec!["a".to_string()]]);
+        assert_eq!(
+            conn.query("SELECT 1").await.unwrap(),
+            vec![vec!["a".to_string()]]
+        );
         assert!(conn.close().await.is_ok());
     }
 
@@ -129,7 +135,10 @@ mod tests {
                 Ok(())
             }
         }
-        let err = FailingDriver.connect("url", "u", "p", None).await.unwrap_err();
+        let err = FailingDriver
+            .connect("url", "u", "p", None)
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("connect refused"));
     }
 }

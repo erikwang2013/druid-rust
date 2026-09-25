@@ -35,7 +35,10 @@ mod tests {
 
     #[test]
     fn test_display_messages() {
-        assert_eq!(DruidError::Pool("full".into()).to_string(), "pool error: full");
+        assert_eq!(
+            DruidError::Pool("full".into()).to_string(),
+            "pool error: full"
+        );
         assert_eq!(
             DruidError::SqlParse("bad token".into()).to_string(),
             "sql parse error: bad token"

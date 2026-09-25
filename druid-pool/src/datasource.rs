@@ -595,7 +595,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_init_twice_fails() {
-        let ds = DruidDataSource::new(MockDriver::new(true, Arc::new(AtomicU64::new(0))), cfg("mock://a"));
+        let ds = DruidDataSource::new(
+            MockDriver::new(true, Arc::new(AtomicU64::new(0))),
+            cfg("mock://a"),
+        );
         assert!(ds.init().await.is_ok());
         let err = ds.init().await.unwrap_err();
         assert!(err.to_string().contains("already initialized"));
@@ -603,7 +606,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_connection_before_init_fails() {
-        let ds = DruidDataSource::new(MockDriver::new(true, Arc::new(AtomicU64::new(0))), cfg("mock://a"));
+        let ds = DruidDataSource::new(
+            MockDriver::new(true, Arc::new(AtomicU64::new(0))),
+            cfg("mock://a"),
+        );
         let err = ds.get_connection().await.err().unwrap();
         assert!(err.to_string().contains("not initialized"));
     }

@@ -111,7 +111,11 @@ mod tests {
         );
         assert_eq!(
             c.deny_functions,
-            vec!["SLEEP".to_string(), "BENCHMARK".to_string(), "LOAD_FILE".to_string()]
+            vec![
+                "SLEEP".to_string(),
+                "BENCHMARK".to_string(),
+                "LOAD_FILE".to_string()
+            ]
         );
         assert!(c.deny_schemas.is_empty());
         assert!(c.deny_keywords.is_empty());

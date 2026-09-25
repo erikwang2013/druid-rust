@@ -273,7 +273,10 @@ mod tests {
         assert_eq!(d.url, n.url);
         assert_eq!(d.max_active, n.max_active);
         assert_eq!(d.test_on_borrow, n.test_on_borrow);
-        assert_eq!(d.time_between_eviction_runs_ms, n.time_between_eviction_runs_ms);
+        assert_eq!(
+            d.time_between_eviction_runs_ms,
+            n.time_between_eviction_runs_ms
+        );
     }
 
     #[test]

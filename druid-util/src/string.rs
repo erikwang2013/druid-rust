@@ -138,7 +138,10 @@ mod tests {
         // 无参数：原样保留 ?
         assert_eq!(substitute_params("a = ?", &[]), "a = ?");
         // 参数少于占位符：剩余 ? 保留
-        assert_eq!(substitute_params("a = ? AND b = ?", &["1"]), "a = '1' AND b = ?");
+        assert_eq!(
+            substitute_params("a = ? AND b = ?", &["1"]),
+            "a = '1' AND b = ?"
+        );
         // 参数多于占位符：多余参数被忽略
         assert_eq!(substitute_params("a = ?", &["1", "2"]), "a = '1'");
         // 无占位符
@@ -203,7 +206,7 @@ mod tests {
         assert_eq!(truncate_sql("", 5), "");
         assert_eq!(truncate_sql("abc", 0), "...");
         assert_eq!(truncate_sql("abc", 3), "abc"); // 恰好相等不截断
-        // 多字节：按字节判断截断，按字符取界（char_indices 保证不越界 panic）
+                                                   // 多字节：按字节判断截断，按字符取界（char_indices 保证不越界 panic）
         assert_eq!(truncate_sql("你好世界", 10), "你好世界...");
         assert_eq!(truncate_sql("你好", 2), "你好..."); // 2 个字符以内，字符数不受字节数限制
         assert_eq!(truncate_sql("你好", 6), "你好");

@@ -307,6 +307,6 @@ mod tests {
         assert!(v.tables.contains("src"));
         assert!(v.tables.contains("x"));
         // 无表限定的列在 SELECT 列表中被丢弃（visit_expr 空表上下文约定）
-        assert!(v.columns.get("src").is_none());
+        assert!(!v.columns.contains_key("src"));
     }
 }

@@ -186,7 +186,10 @@ mod tests {
             Some(DbType::MySQL)
         );
         // 无 :// 分隔时 scheme 匹配失效，但 h2 例外（整体 starts_with 匹配）
-        assert_eq!(detect_db_type_from_url("jdbc:h2:mem:test"), Some(DbType::H2));
+        assert_eq!(
+            detect_db_type_from_url("jdbc:h2:mem:test"),
+            Some(DbType::H2)
+        );
         assert!(detect_db_type_from_url("jdbc:mysql:db").is_none());
         // Oracle thin 格式（无 "://"）无法识别 —— 既有启发式行为，保留文档化
         assert!(detect_db_type_from_url("jdbc:oracle:thin:@h:1521/db").is_none());

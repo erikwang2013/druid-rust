@@ -195,7 +195,9 @@ impl Filter for StatFilter {
             let entry = if let Some(e) = stats.get_mut(sql.as_str()) {
                 e
             } else {
-                stats.entry(sql.clone()).or_insert_with(|| SqlStat::new(sql))
+                stats
+                    .entry(sql.clone())
+                    .or_insert_with(|| SqlStat::new(sql))
             };
             entry.error_count += 1;
         }
@@ -332,7 +334,9 @@ mod tests {
         assert_eq!(stat.idle_count, 0);
         assert_eq!(filter.execute_count(), 0);
 
-        filter.statement_execute_before(&FilterContext::new("ds")).unwrap();
+        filter
+            .statement_execute_before(&FilterContext::new("ds"))
+            .unwrap();
         assert_eq!(filter.execute_count(), 1);
     }
 }

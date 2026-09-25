@@ -1120,7 +1120,9 @@ mod tests {
     #[test]
     fn test_select_basic_structure() {
         let stmt = first("SELECT id, name AS n FROM users WHERE age > 18");
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
         assert!(!s.distinct);
         assert_eq!(s.columns.len(), 2);
         assert_eq!(
@@ -1129,10 +1131,7 @@ mod tests {
         );
         assert_eq!(
             s.columns[1],
-            SelectItem::Expr(
-                SQLExpr::Identifier(vec!["name".into()]),
-                Some("n".into())
-            )
+            SelectItem::Expr(SQLExpr::Identifier(vec!["name".into()]), Some("n".into()))
         );
         let TableReference::Table { name, schema, .. } = s.from.as_ref().unwrap() else {
             panic!("not table")
@@ -1152,7 +1151,9 @@ mod tests {
              WHERE x > 1 GROUP BY t.a HAVING COUNT(*) > 1 \
              ORDER BY t.a DESC, b LIMIT 10 OFFSET 5",
         );
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
         assert!(s.distinct);
         assert_eq!(
             s.columns[1],
@@ -1180,7 +1181,9 @@ mod tests {
              INNER JOIN c ON c.aid = a.id RIGHT OUTER JOIN d ON d.x = c.x \
              CROSS JOIN e ON e.x = a.x JOIN f ON f.a = a.id",
         );
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
         assert_eq!(s.columns[0], SelectItem::Wildcard(None));
         assert_eq!(s.joins.len(), 5);
         assert_eq!(s.joins[0].join_type, JoinType::Left);
@@ -1198,8 +1201,15 @@ mod tests {
     #[test]
     fn test_select_table_alias_and_schema() {
         let stmt = first("SELECT u.id FROM db.users u WHERE u.id = 1");
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
-        let TableReference::Table { name, alias, schema } = s.from.as_ref().unwrap() else {
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
+        let TableReference::Table {
+            name,
+            alias,
+            schema,
+        } = s.from.as_ref().unwrap()
+        else {
             panic!("not table")
         };
         assert_eq!(name, "users");
@@ -1213,8 +1223,7 @@ mod tests {
 
     #[test]
     fn test_insert_and_replace() {
-        let SQLStatement::Insert(ins) =
-            first("INSERT INTO t (a, b) VALUES (1, 'x'), (2, NULL)")
+        let SQLStatement::Insert(ins) = first("INSERT INTO t (a, b) VALUES (1, 'x'), (2, NULL)")
         else {
             panic!("not insert")
         };
@@ -1234,9 +1243,7 @@ mod tests {
 
     #[test]
     fn test_update_delete() {
-        let SQLStatement::Update(up) =
-            first("UPDATE t SET a = 1, b = a + 1 WHERE id = 3")
-        else {
+        let SQLStatement::Update(up) = first("UPDATE t SET a = 1, b = a + 1 WHERE id = 3") else {
             panic!("not update")
         };
         assert_eq!(up.table, "t");
@@ -1295,13 +1302,19 @@ mod tests {
     fn test_drop_variants() {
         let stmts = parse_sql("DROP TABLE IF EXISTS t; DROP VIEW v; DROP INDEX i").unwrap();
         assert_eq!(stmts.len(), 3);
-        let SQLStatement::DropObject(d1) = &stmts[0] else { panic!() };
+        let SQLStatement::DropObject(d1) = &stmts[0] else {
+            panic!()
+        };
         assert_eq!(d1.object_type, DropObjectType::Table);
         assert!(d1.if_exists);
         assert_eq!(d1.name, "t");
-        let SQLStatement::DropObject(d2) = &stmts[1] else { panic!() };
+        let SQLStatement::DropObject(d2) = &stmts[1] else {
+            panic!()
+        };
         assert_eq!(d2.object_type, DropObjectType::View);
-        let SQLStatement::DropObject(d3) = &stmts[2] else { panic!() };
+        let SQLStatement::DropObject(d3) = &stmts[2] else {
+            panic!()
+        };
         assert_eq!(d3.object_type, DropObjectType::Index);
         assert!(!d3.if_exists);
     }
@@ -1309,12 +1322,17 @@ mod tests {
     #[test]
     fn test_with_cte() {
         let stmt = first("WITH x AS (SELECT 1), y (a, b) AS (SELECT 1, 2) SELECT * FROM x");
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
         assert_eq!(s.with_cte.len(), 2);
         assert_eq!(s.with_cte[0].name, "x");
         assert!(s.with_cte[0].columns.is_empty());
         assert_eq!(s.with_cte[1].name, "y");
-        assert_eq!(s.with_cte[1].columns, vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(
+            s.with_cte[1].columns,
+            vec!["a".to_string(), "b".to_string()]
+        );
         let TableReference::Table { name, .. } = s.from.as_ref().unwrap() else {
             panic!()
         };
@@ -1327,8 +1345,17 @@ mod tests {
             "SELECT CASE WHEN a > 1 THEN 'big' WHEN a < 0 THEN 'neg' ELSE 'small' END \
              AS size FROM t",
         );
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
-        let SelectItem::Expr(SQLExpr::Case { expr, whens, else_expr }, alias) = &s.columns[0]
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
+        let SelectItem::Expr(
+            SQLExpr::Case {
+                expr,
+                whens,
+                else_expr,
+            },
+            alias,
+        ) = &s.columns[0]
         else {
             panic!("not case")
         };
@@ -1348,7 +1375,9 @@ mod tests {
              AND d IS NOT NULL \
              AND EXISTS (SELECT 1 FROM u WHERE u.id = t.id)",
         );
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
         // 顶层是 AND 链，逐层解包
         let mut found_between = false;
         let mut found_in = false;
@@ -1362,16 +1391,16 @@ mod tests {
                 walk(right, f);
             }
         }
-        let Some(wc) = &s.where_clause else { panic!("no where") };
-        walk(wc, &mut |e| {
-            match e {
-                SQLExpr::Between { not, .. } => found_between = !*not,
-                SQLExpr::InList { not, .. } => found_in = *not,
-                SQLExpr::Like { not, .. } => found_not_like = *not,
-                SQLExpr::IsNull { not, .. } => found_is_null = *not,
-                SQLExpr::Exists(..) => found_exists = true,
-                _ => {}
-            }
+        let Some(wc) = &s.where_clause else {
+            panic!("no where")
+        };
+        walk(wc, &mut |e| match e {
+            SQLExpr::Between { not, .. } => found_between = !*not,
+            SQLExpr::InList { not, .. } => found_in = *not,
+            SQLExpr::Like { not, .. } => found_not_like = *not,
+            SQLExpr::IsNull { not, .. } => found_is_null = *not,
+            SQLExpr::Exists(..) => found_exists = true,
+            _ => {}
         });
         assert!(found_between && found_in && found_not_like && found_is_null && found_exists);
     }
@@ -1379,31 +1408,40 @@ mod tests {
     #[test]
     fn test_subquery_and_nested() {
         let stmt = first("SELECT (a + b) * c FROM t WHERE id IN (SELECT uid FROM u)");
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
-        let SelectItem::Expr(e, _) = &s.columns[0] else { panic!() };
-        let SQLExpr::BinaryOp { op, .. } = e else { panic!("not binary") };
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
+        let SelectItem::Expr(e, _) = &s.columns[0] else {
+            panic!()
+        };
+        let SQLExpr::BinaryOp { op, .. } = e else {
+            panic!("not binary")
+        };
         assert_eq!(*op, BinaryOpType::Mul);
         let Some(SQLExpr::InSubQuery { expr, query, not }) = &s.where_clause else {
             panic!("not in-subquery")
         };
         assert!(!not);
-        assert_eq!(
-            **expr,
-            SQLExpr::Identifier(vec!["id".into()])
-        );
-        let SQLStatement::Select(q) = query.as_ref() else { panic!() };
+        assert_eq!(**expr, SQLExpr::Identifier(vec!["id".into()]));
+        let SQLStatement::Select(q) = query.as_ref() else {
+            panic!()
+        };
         assert_eq!(q.columns.len(), 1);
     }
 
     #[test]
     fn test_subquery_in_from() {
         let stmt = first("SELECT s.a FROM (SELECT a FROM t) s WHERE s.a > 1");
-        let SQLStatement::Select(outer) = stmt else { panic!("not select") };
+        let SQLStatement::Select(outer) = stmt else {
+            panic!("not select")
+        };
         let TableReference::SubQuery(inner, alias) = outer.from.as_ref().unwrap() else {
             panic!("not subquery")
         };
         assert_eq!(alias, "s");
-        let SQLStatement::Select(q) = inner.as_ref() else { panic!() };
+        let SQLStatement::Select(q) = inner.as_ref() else {
+            panic!()
+        };
         assert_eq!(q.columns.len(), 1);
         assert_eq!(
             q.columns[0],
@@ -1414,7 +1452,9 @@ mod tests {
     #[test]
     fn test_function_and_unary() {
         let stmt = first("SELECT COALESCE(a, 0), -x, NOT y FROM t WHERE NOT EXISTS (SELECT 1)");
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
         assert_eq!(
             s.columns[0],
             SelectItem::Expr(
@@ -1444,7 +1484,9 @@ mod tests {
     #[test]
     fn test_quoted_identifiers_in_expr() {
         let stmt = first(r#"SELECT "col", t."x", 1 AS "one" FROM "t" "al""#);
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
         assert_eq!(
             s.columns[0],
             SelectItem::Expr(SQLExpr::Identifier(vec!["col".into()]), None)
@@ -1453,7 +1495,10 @@ mod tests {
             s.columns[1],
             SelectItem::Expr(SQLExpr::Identifier(vec!["t".into(), "x".into()]), None)
         );
-        assert_eq!(s.columns[2], SelectItem::Expr(SQLExpr::NumberLiteral("1".into()), Some("one".into())));
+        assert_eq!(
+            s.columns[2],
+            SelectItem::Expr(SQLExpr::NumberLiteral("1".into()), Some("one".into()))
+        );
         let TableReference::Table { name, alias, .. } = s.from.as_ref().unwrap() else {
             panic!("not table")
         };
@@ -1464,7 +1509,9 @@ mod tests {
     #[test]
     fn test_string_literal_escapes_in_sql() {
         let stmt = first(r#"SELECT 'it''s', 'a\'b'"#);
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
         assert_eq!(
             s.columns[0],
             SelectItem::Expr(SQLExpr::StringLiteral("it's".into()), None)
@@ -1487,8 +1534,12 @@ mod tests {
     #[test]
     fn test_placeholder() {
         let stmt = first("SELECT * FROM t WHERE a = ? AND b IN (?, ?)");
-        let SQLStatement::Select(s) = stmt else { panic!("not select") };
-        let Some(SQLExpr::BinaryOp { .. }) = &s.where_clause else { panic!() };
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
+        let Some(SQLExpr::BinaryOp { .. }) = &s.where_clause else {
+            panic!()
+        };
         let sql = crate::format::format_statement(&SQLStatement::Select(s));
         assert!(sql.contains("?"));
     }

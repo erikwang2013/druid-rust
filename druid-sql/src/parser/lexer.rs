@@ -317,7 +317,10 @@ mod tests {
 
     #[test]
     fn test_numbers() {
-        assert_eq!(tokenize("123"), vec![Token::Number("123".into()), Token::Eof]);
+        assert_eq!(
+            tokenize("123"),
+            vec![Token::Number("123".into()), Token::Eof]
+        );
         assert_eq!(
             tokenize("3.14"),
             vec![Token::Number("3.14".into()), Token::Eof]
@@ -354,7 +357,7 @@ mod tests {
                 Token::Eof
             ]
         );
-            assert_eq!(
+        assert_eq!(
             tokenize("-> :: :="),
             vec![Token::Arrow, Token::DoubleColon, Token::Assign, Token::Eof]
         );

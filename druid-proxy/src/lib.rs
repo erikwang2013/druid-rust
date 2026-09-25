@@ -195,7 +195,10 @@ mod tests {
         fn connection_closed(&self, _: &druid_filter::FilterContext) {
             self.counters.closed.fetch_add(1, Ordering::SeqCst);
         }
-        fn statement_execute_before(&self, _: &druid_filter::FilterContext) -> Result<(), DruidError> {
+        fn statement_execute_before(
+            &self,
+            _: &druid_filter::FilterContext,
+        ) -> Result<(), DruidError> {
             self.counters.before.fetch_add(1, Ordering::SeqCst);
             Ok(())
         }
@@ -226,7 +229,10 @@ mod tests {
     #[test]
     fn test_proxy_execute_error_propagates() {
         let inner = Arc::new(TrackingConn::new(1, true));
-        let conn = Arc::new(ProxyConnection::new(inner, Arc::new(FilterChain::new("test"))));
+        let conn = Arc::new(ProxyConnection::new(
+            inner,
+            Arc::new(FilterChain::new("test")),
+        ));
         let stmt = conn.create_statement();
         let err = stmt.execute("SELECT BAD").unwrap_err();
         assert!(err.to_string().contains("query failed"));
@@ -257,7 +263,10 @@ mod tests {
     #[test]
     fn test_proxy_statement_on_closed_connection_no_panic() {
         let inner = Arc::new(TrackingConn::new(1, false));
-        let conn = Arc::new(ProxyConnection::new(inner, Arc::new(FilterChain::new("test"))));
+        let conn = Arc::new(ProxyConnection::new(
+            inner,
+            Arc::new(FilterChain::new("test")),
+        ));
         let stmt = conn.create_statement();
         conn.close().unwrap();
         // close 后执行不 panic，底层调用照常转发

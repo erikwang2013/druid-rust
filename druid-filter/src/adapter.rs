@@ -23,7 +23,7 @@ impl Filter for FilterAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{FilterContext, Filter};
+    use crate::{Filter, FilterContext};
 
     #[test]
     fn test_adapter_name() {

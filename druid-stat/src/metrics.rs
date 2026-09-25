@@ -39,7 +39,9 @@ impl PoolMetrics {
         // saturating：多余的解等待计数不会把计数回绕成 u64::MAX
         let _ = self
             .waiting_count
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| Some(v.saturating_sub(1)));
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+                Some(v.saturating_sub(1))
+            });
     }
     pub fn inc_borrow(&self) {
         self.borrow_count.fetch_add(1, Ordering::Relaxed);

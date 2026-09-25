@@ -482,16 +482,20 @@ mod tests {
     #[test]
     fn test_deny_function_in_subquery_and_case_when() {
         let c = WallChecker::new(WallConfig::default());
-        assert!(!check_one(
-            &c,
-            "SELECT id FROM users WHERE id IN (SELECT id FROM t WHERE x=SLEEP(1))"
-        )
-        .allowed);
-        assert!(!check_one(
-            &c,
-            "SELECT CASE WHEN SLEEP(1)=1 THEN 1 ELSE 0 END FROM users"
-        )
-        .allowed);
+        assert!(
+            !check_one(
+                &c,
+                "SELECT id FROM users WHERE id IN (SELECT id FROM t WHERE x=SLEEP(1))"
+            )
+            .allowed
+        );
+        assert!(
+            !check_one(
+                &c,
+                "SELECT CASE WHEN SLEEP(1)=1 THEN 1 ELSE 0 END FROM users"
+            )
+            .allowed
+        );
     }
 
     #[test]
@@ -513,7 +517,10 @@ mod tests {
         let c = WallChecker::new(cfg);
         // 词边界：drop 在单词中间不应命中
         assert!(c.quick_check("SELECT * FROM dropdown").allowed);
-        assert!(c.quick_check("SELECT * FROM x WHERE y='not drop here'").allowed);
+        assert!(
+            c.quick_check("SELECT * FROM x WHERE y='not drop here'")
+                .allowed
+        );
         assert!(!c.quick_check("SELECT * FROM users DROP").allowed);
     }
 
