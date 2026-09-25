@@ -29,6 +29,10 @@ jobs:
             echo "Release $TAG already exists, skipping"
             exit 0
           fi
-          git tag -a "$TAG" -m "Druid Rust $TAG"
-          git push origin "$TAG"
-          gh release create "$TAG" --generate-notes --title "Druid Rust $TAG"
+          # gh release create 经 API 建 tag，不依赖本地 git 身份
+          # （runner 已不再预置 user.name / user.email，本地 git tag -a 会以
+          #  "empty ident name" 失败）
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --generate-notes \
+            --title "Druid Rust $TAG"

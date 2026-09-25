@@ -23,6 +23,10 @@ All notable changes to Druid-Rust.
 ### Changed
 - README / README_EN 测试徽章与测试分布表：61 → **231**（实测）
 - README 部署运维章节版本号示例：1.0.8 → 1.2.0
+- `.github/workflows/release.yml`: `git tag -a` + `git push` 改为
+  `gh release create --target`。runner 已不再预置 git 身份，原先的
+  `git tag -a` 会以 `fatal: empty ident name` 失败，导致 Release workflow
+  连续失败且不发版（v1.1.9 之后一直如此）
 
 ### 含自上一个 release（v1.1.9）以来的变更（未单独发版）
 
