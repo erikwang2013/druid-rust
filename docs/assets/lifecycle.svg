@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 540" width="1000" height="540" role="img" aria-labelledby="drLifeTitle drLifeDesc">
+  <title id="drLifeTitle">Druid-Rust 连接生命周期</title>
+  <desc id="drLifeDesc">池化连接从创建、空闲、活跃到销毁的状态流转，含借出、验证、归还、驱逐与 KeepAlive。</desc>
+
+  <defs>
+    <marker id="drLifeArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#5b7fa6"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="540" rx="14" fill="#0b1b2b"/>
+  <rect x="0.5" y="0.5" width="999" height="539" rx="13.5" fill="none" stroke="#1e3a5f"/>
+
+  <text x="32" y="46" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="20" font-weight="700" fill="#e2e8f0">连接生命周期</text>
+  <text x="32" y="70" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#7c93a8">从创建到销毁：借出 · 验证 · 归还 · 驱逐 · KeepAlive</text>
+
+  <!-- KeepAlive 自环 -->
+  <path d="M320 120 C 320 86 424 86 424 120" fill="none" stroke="#5b7fa6" stroke-width="1.8" marker-end="url(#drLifeArrow)"/>
+  <text x="372" y="114" text-anchor="middle" font-family="ui-monospace, monospace" font-size="9.5" fill="#7c93a8">KeepAlive</text>
+
+  <!-- 创建 -->
+  <rect x="32" y="120" width="170" height="72" rx="10" fill="#38bdf8" fill-opacity=".1" stroke="#38bdf8" stroke-opacity=".5" stroke-width="1.2"/>
+  <text x="117" y="152" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="14" font-weight="700" fill="#7dd3fc">创建</text>
+  <text x="117" y="172" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#94a3b8">driver.connect()</text>
+
+  <!-- 空闲 -->
+  <rect x="287" y="120" width="170" height="72" rx="10" fill="#4ade80" fill-opacity=".1" stroke="#4ade80" stroke-opacity=".5" stroke-width="1.2"/>
+  <text x="372" y="152" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="14" font-weight="700" fill="#86efac">空闲</text>
+  <text x="372" y="172" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">Idle · 空闲队列</text>
+
+  <!-- 活跃 -->
+  <rect x="542" y="120" width="170" height="72" rx="10" fill="#fbbf24" fill-opacity=".1" stroke="#fbbf24" stroke-opacity=".5" stroke-width="1.2"/>
+  <text x="627" y="152" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="14" font-weight="700" fill="#fcd34d">活跃</text>
+  <text x="627" y="172" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">Active · PoolGuard 持有</text>
+
+  <!-- 验证（可选检查点，虚线边框） -->
+  <rect x="797" y="126" width="170" height="60" rx="10" fill="#f472b6" fill-opacity=".08" stroke="#f472b6" stroke-opacity=".55" stroke-width="1.2" stroke-dasharray="6 4"/>
+  <text x="882" y="154" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="14" font-weight="700" fill="#f9a8d4">验证</text>
+  <text x="882" y="173" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">Validating · 可选检查点</text>
+
+  <!-- 销毁 -->
+  <rect x="560" y="400" width="180" height="72" rx="10" fill="#ef4444" fill-opacity=".1" stroke="#ef4444" stroke-opacity=".5" stroke-width="1.2"/>
+  <text x="650" y="432" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="14" font-weight="700" fill="#fca5a5">销毁</text>
+  <text x="650" y="452" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" fill="#94a3b8">conn.close()</text>
+
+  <!-- 主路径箭头 -->
+  <g fill="none" stroke="#5b7fa6" stroke-width="1.8" marker-end="url(#drLifeArrow)">
+    <path d="M202 156 L287 156"/>
+    <path d="M457 156 L542 156"/>
+    <path d="M712 156 L797 156"/>
+  </g>
+  <text x="244" y="144" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="9.5" fill="#7c93a8">连接成功</text>
+  <text x="499" y="144" text-anchor="middle" font-family="ui-monospace, monospace" font-size="9.5" fill="#7c93a8">borrow</text>
+  <text x="754" y="144" text-anchor="middle" font-family="ui-monospace, monospace" font-size="9.5" fill="#7c93a8">return</text>
+
+  <!-- 归还：验证 → 空闲 -->
+  <path d="M882 186 L882 350 L372 350 L372 192" fill="none" stroke="#5b7fa6" stroke-width="1.8" marker-end="url(#drLifeArrow)"/>
+  <text x="627" y="340" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#7c93a8">归还 · PoolGuard::drop()</text>
+
+  <!-- 验证失败：验证 → 销毁 -->
+  <path d="M940 186 L940 436 L740 436" fill="none" stroke="#ef4444" stroke-width="1.6" stroke-opacity=".7" marker-end="url(#drLifeArrow)"/>
+  <text x="790" y="426" text-anchor="end" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#f87171">验证失败</text>
+
+  <!-- 驱逐：空闲 → 销毁 -->
+  <path d="M337 192 L337 436 L560 436" fill="none" stroke="#5b7fa6" stroke-width="1.8" marker-end="url(#drLifeArrow)"/>
+  <text x="448" y="426" text-anchor="middle" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#7c93a8">空闲超时驱逐</text>
+
+  <!-- 关键机制说明 -->
+  <rect x="32" y="386" width="288" height="128" rx="10" fill="#ffffff" fill-opacity=".03" stroke="#ffffff" stroke-opacity=".08"/>
+  <text x="48" y="410" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#94a3b8">关键机制</text>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#7c93a8">
+    <text x="48" y="434">· PoolGuard::drop() 触发自动归还</text>
+    <text x="48" y="456">· test_on_borrow / test_on_return 验证</text>
+    <text x="48" y="478">· test_while_idle 空闲验证</text>
+    <text x="48" y="497">· min_evictable_idle_time_ms 驱逐阈值</text>
+  </g>
+</svg>

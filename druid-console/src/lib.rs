@@ -3,6 +3,13 @@ use std::sync::Arc;
 use axum::{extract::State, routing::get, Json, Router};
 use druid_stat::StatFilter;
 
+/// 项目宠物「小德」——德鲁伊猫头鹰。
+///
+/// 与 README 共用同一份 `docs/assets/mascot.svg`，避免资产副本。
+/// 注：跨 crate 目录的 `include_str!` 会让 `cargo package` 失败；
+/// 若将来要发布 druid-console 到 crates.io，把该文件挪进本 crate 即可。
+const MASCOT_SVG: &str = include_str!("../../docs/assets/mascot.svg");
+
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -28,7 +35,15 @@ pub fn make_router(stat_filter: Arc<StatFilter>) -> Router {
         .route("/druid/sql.json", get(sql_json))
         .route("/druid/slow-sql.json", get(slow_sql_json))
         .route("/druid/index.html", get(index_page))
+        .route("/druid/mascot.svg", get(mascot_svg))
         .with_state(state)
+}
+
+async fn mascot_svg() -> impl axum::response::IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "image/svg+xml")],
+        MASCOT_SVG,
+    )
 }
 
 pub async fn start_server(
@@ -78,8 +93,11 @@ async fn index_page(State(state): State<Arc<AppState>>) -> axum::response::Html<
     let html = format!(
         r#"<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Druid Monitor</title>
+<link rel="icon" type="image/svg+xml" href="/druid/mascot.svg">
 <style>body{{font-family:monospace;margin:20px;background:#f5f5f5}}
-h1{{color:#333}} .stat{{display:flex;gap:15px;flex-wrap:wrap;margin:15px 0}}
+h1{{color:#333;margin:0}} .stat{{display:flex;gap:15px;flex-wrap:wrap;margin:15px 0}}
+.hdr{{display:flex;align-items:center;gap:14px;margin-bottom:10px}}
+.hdr svg{{width:56px;height:56px;flex:none}}
 .card{{background:#fff;padding:15px;border-radius:8px;min-width:120px;text-align:center}}
 .card .val{{font-size:28px;font-weight:bold;color:#1890ff}}
 .card .label{{color:#999;font-size:12px;margin-top:5px}}
@@ -87,7 +105,7 @@ table{{width:100%;border-collapse:collapse;background:#fff;margin-top:20px}}
 th,td{{padding:8px 12px;text-align:left;border-bottom:1px solid #eee;font-size:13px}}
 th{{background:#fafafa;font-weight:bold}}</style></head>
 <body>
-<h1>Druid Monitor — {name}</h1>
+<div class="hdr">{mascot}<h1>Druid Monitor — {name}</h1></div>
 <div class="stat">
 <div class="card"><div class="val">{active}</div><div class="label">Active</div></div>
 <div class="card"><div class="val">{idle}</div><div class="label">Idle</div></div>
@@ -100,6 +118,7 @@ th{{background:#fafafa;font-weight:bold}}</style></head>
 <table><tr><th>SQL</th><th>Exec Count</th><th>Total</th><th>Max</th><th>Errors</th><th>Last Run</th></tr>
 {rows}</table>
 </body></html>"#,
+        mascot = MASCOT_SVG,
         name = html_escape(&stat.name),
         active = stat.active_count,
         idle = stat.idle_count,
@@ -272,6 +291,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_mascot_svg_endpoint() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/mascot.svg")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.headers().get("content-type").unwrap(), "image/svg+xml");
+        let body = axum::body::to_bytes(resp.into_body(), 102400)
+            .await
+            .unwrap();
+        let svg = String::from_utf8_lossy(&body);
+        assert!(svg.starts_with("<svg"));
+        assert!(svg.contains("德鲁伊猫头鹰"));
+    }
+
+    #[tokio::test]
+    async fn test_index_embeds_mascot() {
+        let app = test_app();
+        let req = Request::builder()
+            .uri("/druid/index.html")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 204800)
+            .await
+            .unwrap();
+        let html = String::from_utf8_lossy(&body);
+        // 宠物以 inline SVG 形式出现在页头，并注册为 favicon
+        assert!(html.contains(r#"<div class="hdr"><svg"#));
+        assert!(html.contains(r#"href="/druid/mascot.svg""#));
+        assert_eq!(html.matches("<svg").count(), 1);
+    }
+
+    #[tokio::test]
     async fn test_unknown_route_404() {
         let app = test_app();
         let req = Request::builder()
@@ -314,9 +369,15 @@ mod tests {
     #[test]
     fn test_db_type_serde_renames() {
         use druid_core::DbType;
-        assert_eq!(serde_json::to_string(&DbType::SqlServer).unwrap(), "\"sqlserver\"");
+        assert_eq!(
+            serde_json::to_string(&DbType::SqlServer).unwrap(),
+            "\"sqlserver\""
+        );
         assert_eq!(serde_json::to_string(&DbType::DM).unwrap(), "\"dm\"");
-        assert_eq!(serde_json::to_string(&DbType::TransactSql).unwrap(), "\"transact-sql\"");
+        assert_eq!(
+            serde_json::to_string(&DbType::TransactSql).unwrap(),
+            "\"transact-sql\""
+        );
         assert_eq!(serde_json::to_string(&DbType::ODPS).unwrap(), "\"odps\"");
         assert_eq!(serde_json::to_string(&DbType::MySQL).unwrap(), "\"MySQL\"");
 

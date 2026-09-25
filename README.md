@@ -1,15 +1,35 @@
 # Druid Rust
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-61%20passed-green)]()
+[![Tests](https://img.shields.io/badge/tests-231%20passed-green)]()
+
+<p align="center">
+  <img src="docs/assets/mascot.svg" width="140" alt="Druid-Rust 项目宠物 · 德鲁伊猫头鹰「小德」">
+</p>
 
 [English Documentation](docs/README_EN.md) | 中文文档
 
-**Druid-Rust** 是 [Alibaba Druid](https://github.com/alibaba/druid) 的 Rust 移植版——将 JDBC 连接池、SQL 解析分析、安全防护和监控统计深度整合为一体，是 Rust 生态中功能最全面的数据库连接池之一。
+**Druid-Rust** 是 [Alibaba Druid](https://github.com/alibaba/druid) 的 Rust 移植版——将异步连接池、SQL 解析分析、安全防护与监控统计统合为一体，是 Rust 生态中功能最完整的数据库连接池之一。
+
+## 项目宠物 · 小德
+
+**小德**（Druid Owl）是一只戴着德鲁伊兜帽的猫头鹰，本项目唯一的吉祥物。它的三个特征正好对应项目的三块能力：
+
+| 特征 | 对应能力 |
+|------|----------|
+| 🦉 守夜不眠 | **监控统计**（druid-stat）——每条 SQL 的次数、耗时、慢查询都看在眼里 |
+| 🌿 德鲁伊兜帽 | **安全防护**（druid-wall）——AST 级 SQL 防火墙，挡住注入与危险操作 |
+| 💧 立于连接池之上 | **连接池**（druid-pool）——池化复用，随借随还 |
+
+小德也出现在 Web 控制台页头：`druid-console` 通过 `include_str!` 内联同一份
+[`docs/assets/mascot.svg`](docs/assets/mascot.svg)，并注册为 `/druid/mascot.svg` 与站点 favicon。
 
 ## 目录
 
+- [项目宠物 · 小德](#项目宠物--小德)
 - [架构设计](#架构设计)
+  - [分层架构](#分层架构)
+  - [连接生命周期](#连接生命周期)
 - [项目结构](#项目结构)
 - [核心功能](#核心功能)
 - [快速开始](#快速开始)
@@ -22,32 +42,12 @@
 
 ## 架构设计
 
+![Druid-Rust 架构设计](docs/assets/architecture.svg)
+
 ### 分层架构
 
-```
-┌─────────────────────────────────────────────────┐
-│                  druid-console                   │  ← Web 监控控制台
-│              (axum HTTP + 监控页面)               │
-├─────────────────────────────────────────────────┤
-│     druid-ha (高可用)    │   druid-proxy (代理)   │  ← 高级特性层
-│   加权轮询 / 故障切换     │  Filter 自动拦截       │
-├─────────────────────────────────────────────────┤
-│                  druid-pool                      │  ← 连接池核心
-│   Semaphore 并发 / 驱逐 / KeepAlive / PSCache    │
-├──────────────────┬──────────────────────────────┤
-│   druid-wall     │       druid-stat             │  ← Filter 插件层
-│   SQL 防火墙      │       监控统计               │
-├──────────────────┴──────────────────────────────┤
-│                druid-filter                      │  ← 可插拔架构
-│          Filter-Chain 责任链 (20+ 钩子)          │
-├─────────────────────────────────────────────────┤
-│                 druid-sql                        │  ← SQL 解析引擎
-│      Lexer / Parser / AST / Visitor / Format     │
-├─────────────────────────────────────────────────┤
-│          druid-core  +  druid-util               │  ← 基础设施
-│      DruidError / DbType / DruidConfig           │
-└─────────────────────────────────────────────────┘
-```
+10 个 crate 分为 7 层，依赖单向向下——上层可以依赖下层，下层永不反向依赖上层。
+`druid-pool` 是核心，其余 crate 围绕它提供解析、防护、观测与运维能力。
 
 ### 设计原则
 
@@ -97,6 +97,24 @@ PoolGuard::drop()                     ← RAII 自动归还
   • KeepAlive: 定时验证空闲连接有效性
 ```
 
+### 连接生命周期
+
+![Druid-Rust 连接生命周期](docs/assets/lifecycle.svg)
+
+池化连接的完整状态流转：
+
+| 状态 | 触发 | 说明 |
+|------|------|------|
+| **创建** Creating | `init()` 预热 / 池空时按需创建 | 调用 `Driver::connect()` |
+| **空闲** Idle | 连接成功 / 归还 | 进入空闲队列 `VecDeque` |
+| **活跃** Active | `get_connection()` 借出 | 由 `PoolGuard` 持有，RAII 保证归还 |
+| **验证** Validating | `test_on_borrow` / `test_on_return` / KeepAlive | 可选检查点，失败即销毁 |
+| **销毁** Destroyed | `close()` / 验证失败 / 空闲超时驱逐 | 调用 `Connection::close()` |
+
+- **归还**：`PoolGuard` 在 `drop` 时自动归还，业务代码无需显式释放，panic 也不会泄漏连接。
+- **驱逐**：空闲超过 `min_evictable_idle_time_ms` 的连接被后台 Evictor 回收。
+- **KeepAlive**：`keep_alive` 开启后，后台任务定时 `ping` 空闲连接，避免被数据库端或中间件断开。
+
 ## 项目结构
 
 ```
@@ -104,8 +122,14 @@ druid-rust/
 ├── README.md                          # 项目说明（本文件）
 ├── Cargo.toml                         # workspace 根，管理 10 个 crate
 ├── docs/
+│   ├── assets/                        # ── 项目图像资源 ──
+│   │   ├── mascot.svg                 #   项目宠物「小德」（README + 控制台共用）
+│   │   ├── architecture.svg           #   架构设计图
+│   │   ├── features.svg               #   功能设计图
+│   │   └── lifecycle.svg              #   连接生命周期图
 │   ├── PLAN.md                        # 重构规划文档
 │   ├── README_EN.md                   # 英文文档
+│   ├── TEST_REPORT.md                 # 测试报告
 │   └── REVIEW_REPORT.md               # 代码审查报告
 │
 ├── druid-core/                        # ── 层 0: 基础设施 ──
@@ -178,7 +202,8 @@ druid-rust/
          • /druid/stat.json
          • /druid/sql.json
          • /druid/slow-sql.json
-         • /druid/index.html (监控页面)
+         • /druid/index.html (监控页面，页头内联「小德」)
+         • /druid/mascot.svg (项目宠物，同时作为 favicon)
 ```
 
 ### Crate 依赖关系
@@ -193,6 +218,10 @@ druid-proxy ────────► druid-pool        druid-stat
 ```
 
 ## 核心功能
+
+![Druid-Rust 功能设计](docs/assets/features.svg)
+
+六大功能域，以 `druid-pool` 为核心，通过 `druid-filter` 责任链向外扩展。
 
 ### 1. 连接池 (druid-pool)
 
@@ -454,7 +483,7 @@ impl Filter for MyLogFilter {
 
 ```toml
 [workspace.package]
-version = "1.0.8"
+version = "1.2.0"
 ```
 
 所有 10 个子 crate 通过 `version.workspace = true` 继承，修改版本号只需改一处。
@@ -473,7 +502,7 @@ cargo build --release    # LTO + codegen-units=1
 cargo check --workspace          # 快速检查编译
 cargo clippy --all-targets       # Lint 检查（当前: 0 warnings）
 cargo fmt --all                  # 格式化
-cargo test --workspace           # 61 passed; 0 failed
+cargo test --workspace           # 231 passed; 0 failed
 ```
 
 ### 运行基准
@@ -492,17 +521,17 @@ cargo run --example basic
 
 | Crate | 测试数 |
 |-------|--------|
-| druid-core | 7 |
-| druid-util | 15 |
-| druid-sql | 8 |
-| druid-filter | 5 |
-| druid-wall | 7 |
-| druid-pool | 7 |
-| druid-stat | 3 |
-| druid-console | 5 |
-| druid-proxy | 2 |
-| druid-ha | 2 |
-| **总计** | **61** |
+| druid-core | 23 |
+| druid-util | 35 |
+| druid-sql | 53 |
+| druid-wall | 34 |
+| druid-pool | 23 |
+| druid-filter | 18 |
+| druid-console | 16 |
+| druid-stat | 14 |
+| druid-ha | 8 |
+| druid-proxy | 7 |
+| **总计** | **231** |
 
 ## 审查报告
 
@@ -510,7 +539,7 @@ cargo run --example basic
 
 - `cargo check`: ✅ 零警告
 - `cargo clippy --all-targets`: ✅ 零警告
-- `cargo test`: ✅ 61/61 通过
+- `cargo test`: ✅ 231/231 通过
 - `cargo fmt --check`: ✅ 格式一致
 
 ## License

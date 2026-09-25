@@ -1,15 +1,37 @@
 # Druid-Rust
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-61%20passed-green)]()
+[![Tests](https://img.shields.io/badge/tests-231%20passed-green)]()
+
+<p align="center">
+  <img src="assets/mascot.svg" width="140" alt="Druid-Rust mascot — the Druid Owl">
+</p>
 
 [中文文档](../README.md) | English
 
 **Druid-Rust** is a Rust port of [Alibaba Druid](https://github.com/alibaba/druid) — a high-performance, monitorable database connection pool with integrated SQL parsing, security firewall, and statistics.
 
+## Project Mascot · Xiao De
+
+**Xiao De** (the Druid Owl) is the project's mascot — an owl wearing a druid's hood. Its three traits map onto the three pillars of the project:
+
+| Trait | Capability |
+|-------|------------|
+| 🦉 Never sleeps | **Statistics** (druid-stat) — every SQL call's count, latency and slow queries |
+| 🌿 Druid hood | **Security** (druid-wall) — AST-level SQL firewall against injection and dangerous statements |
+| 💧 Perched on the pool | **Connection pooling** (druid-pool) — pooled reuse, borrow and return |
+
+The owl also appears in the Web console header: `druid-console` inlines the same
+[`assets/mascot.svg`](assets/mascot.svg) via `include_str!`, and serves it at `/druid/mascot.svg` as the favicon.
+
+> The diagrams below use Chinese labels with English identifiers, matching the primary README.
+
 ## Table of Contents
 
+- [Project Mascot · Xiao De](#project-mascot--xiao-de)
 - [Architecture](#architecture)
+  - [Layered Design](#layered-design)
+  - [Connection Lifecycle](#connection-lifecycle)
 - [Project Structure](#project-structure)
 - [Features](#features)
 - [Quick Start](#quick-start)
@@ -21,32 +43,13 @@
 
 ## Architecture
 
+![Druid-Rust architecture](assets/architecture.svg)
+
 ### Layered Design
 
-```
-┌─────────────────────────────────────────────────┐
-│                  druid-console                   │  ← Web monitoring
-│               (axum HTTP + dashboard)            │
-├─────────────────────────────────────────────────┤
-│      druid-ha (HA)       │   druid-proxy (proxy) │  ← Advanced layer
-│   Weighted round-robin    │   Filter interception │
-├─────────────────────────────────────────────────┤
-│                  druid-pool                      │  ← Connection pool core
-│    Semaphore / Eviction / KeepAlive / PSCache    │
-├──────────────────┬──────────────────────────────┤
-│   druid-wall     │       druid-stat             │  ← Filter plugins
-│   SQL Firewall    │       Statistics             │
-├──────────────────┴──────────────────────────────┤
-│                druid-filter                      │  ← Pluggable architecture
-│           Filter-Chain (20+ hooks)               │
-├─────────────────────────────────────────────────┤
-│                 druid-sql                        │  ← SQL parsing engine
-│       Lexer / Parser / AST / Visitor / Format    │
-├─────────────────────────────────────────────────┤
-│           druid-core  +  druid-util              │  ← Foundation
-│        DruidError / DbType / DruidConfig          │
-└─────────────────────────────────────────────────┘
-```
+Ten crates in seven layers. Dependencies point strictly downward — an upper layer may
+depend on a lower one, never the reverse. `druid-pool` is the core; the other crates
+surround it with parsing, protection, observability and operations.
 
 ### Design Principles
 
@@ -96,6 +99,24 @@ Background (tokio::spawn):
   • KeepAlive: Periodic idle connection validation
 ```
 
+### Connection Lifecycle
+
+![Druid-Rust connection lifecycle](assets/lifecycle.svg)
+
+| State | Entered via | Notes |
+|-------|-------------|-------|
+| **Creating** | `init()` warm-up / on-demand when the pool is empty | Calls `Driver::connect()` |
+| **Idle** | Connect succeeded / connection returned | Queued in an idle `VecDeque` |
+| **Active** | Borrowed by `get_connection()` | Held by `PoolGuard`; RAII guarantees return |
+| **Validating** | `test_on_borrow` / `test_on_return` / KeepAlive | Optional checkpoint; failure destroys the connection |
+| **Destroyed** | `close()` / validation failure / idle timeout eviction | Calls `Connection::close()` |
+
+- **Return**: `PoolGuard` returns the connection on `drop` — no explicit release needed, and a poisoned
+  lock is recovered via `unwrap_or_else(|e| e.into_inner())`, so a panic does not leak the connection.
+- **Eviction**: connections idle longer than `min_evictable_idle_time_ms` are reclaimed by the background Evictor.
+- **KeepAlive**: with `keep_alive` enabled, a background task `ping`s idle connections so database-side or
+  middleware timeouts do not silently kill them.
+
 ## Project Structure
 
 ```
@@ -103,8 +124,14 @@ druid-rust/
 ├── README.md              # Chinese documentation
 ├── Cargo.toml             # Workspace root (10 crates)
 ├── docs/
+│   ├── assets/            # Project image assets
+│   │   ├── mascot.svg     #   Mascot "Xiao De" (shared by README + console)
+│   │   ├── architecture.svg  # Architecture diagram
+│   │   ├── features.svg      # Feature map
+│   │   └── lifecycle.svg     # Connection lifecycle diagram
 │   ├── PLAN.md            # Migration plan
 │   ├── README_EN.md       # English docs (this file)
+│   ├── TEST_REPORT.md     # Test report
 │   └── REVIEW_REPORT.md   # Code review report
 │
 ├── druid-core/            # Foundation: DruidError, DbType, DruidConfig
@@ -119,6 +146,9 @@ druid-rust/
 ├── druid-proxy/           # Proxy layer: ProxyConnection, ProxyStatement
 ├── druid-ha/              # High availability: load balancing, failover
 └── druid-console/         # Web console: axum server, dashboard, JSON APIs
+                           #   • /druid/stat.json, /druid/sql.json, /druid/slow-sql.json
+                           #   • /druid/index.html (dashboard, inlines the mascot)
+                           #   • /druid/mascot.svg (mascot, also the favicon)
 ```
 
 ### Crate Dependency Graph
@@ -132,6 +162,10 @@ druid-proxy   → druid-pool    druid-util
 ```
 
 ## Features
+
+![Druid-Rust feature map](assets/features.svg)
+
+Six feature domains built around `druid-pool`, extended outward through the `druid-filter` chain.
 
 ### Connection Pool (druid-pool)
 
@@ -350,7 +384,7 @@ Key differences from Java:
 cargo check --workspace          # Quick compile check
 cargo clippy --all-targets       # Lint check (current: 0 warnings)
 cargo fmt --all                  # Format
-cargo test --workspace           # 61 passed; 0 failed
+cargo test --workspace           # 231 passed; 0 failed
 ```
 
 ### Benchmarks
@@ -369,17 +403,17 @@ cargo run --example basic
 
 | Crate | Tests |
 |-------|-------|
-| druid-core | 7 |
-| druid-util | 15 |
-| druid-sql | 8 |
-| druid-filter | 5 |
-| druid-wall | 7 |
-| druid-pool | 7 |
-| druid-stat | 3 |
-| druid-console | 5 |
-| druid-proxy | 2 |
-| druid-ha | 2 |
-| **Total** | **61** |
+| druid-core | 23 |
+| druid-util | 35 |
+| druid-sql | 53 |
+| druid-wall | 34 |
+| druid-pool | 23 |
+| druid-filter | 18 |
+| druid-console | 16 |
+| druid-stat | 14 |
+| druid-ha | 8 |
+| druid-proxy | 7 |
+| **Total** | **231** |
 
 ## Review Report
 
@@ -387,7 +421,7 @@ Latest code review: [REVIEW_REPORT.md](REVIEW_REPORT.md)
 
 - `cargo check`: ✅ Zero warnings
 - `cargo clippy --all-targets`: ✅ Zero warnings
-- `cargo test`: ✅ 61/61 passed
+- `cargo test`: ✅ 231/231 passed
 - `cargo fmt --check`: ✅ Consistent formatting
 
 ## License

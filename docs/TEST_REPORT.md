@@ -1,15 +1,15 @@
 # Druid Rust 单元测试报告
 
-- 日期：2026-08-27
-- 版本：1.1.9
+- 日期：2026-09-26
+- 版本：1.2.0
 - 命令：`cargo test --workspace`
-- 结果：**229 通过 / 0 失败 / 0 忽略**
+- 结果：**231 通过 / 0 失败 / 0 忽略**
 
 ## 各模块统计
 
 | 模块 | 测试数 | 覆盖重点 |
 |------|-------:|----------|
-| druid-console | 14 | 端点 JSON 结构、404、XSS 转义、跨 crate serde round-trip |
+| druid-console | 16 | 端点 JSON 结构、404、XSS 转义、跨 crate serde round-trip、宠物 SVG 路由与页头内联 |
 | druid-core | 23 | 配置解析、错误类型、类型序列化 |
 | druid-filter | 18 | 链调用顺序、execute_before 短路、init 失败中断、空链 |
 | druid-ha | 8 | 加权轮询、零权重、健康检查状态机 |
@@ -20,7 +20,16 @@
 | druid-util | 35 | 加解密、SQL 检测、字符串、时间工具 |
 | druid-wall | 34 | SQL 防火墙规则（字面量、词边界、子查询、INTO OUTFILE、超长 SQL） |
 
-## 发现并修复的问题（14 项）
+## 1.2.0 新增测试（2 项）
+
+| 模块 | 测试 | 断言 |
+|------|------|------|
+| druid-console | `test_mascot_svg_endpoint` | `/druid/mascot.svg` 返回 200 + `image/svg+xml`，正文以 `<svg` 开头且含宠物标题 |
+| druid-console | `test_index_embeds_mascot` | 页头内联宠物 SVG（`<div class="hdr"><svg`）、favicon 指向 `/druid/mascot.svg`、页面仅一个 `<svg>` 根 |
+
+## 发现并修复的问题
+
+以下 14 项由 v1.1.9 的测试补全工作发现并修复。
 
 | 模块 | 问题 | 修复 |
 |------|------|------|

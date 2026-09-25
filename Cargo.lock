@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "druid-console"
-version = "1.1.9"
+version = "1.2.0"
 dependencies = [
  "axum",
  "druid-core",
@@ -397,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "druid-core"
-version = "1.1.9"
+version = "1.2.0"
 dependencies = [
  "chrono",
  "serde",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "druid-filter"
-version = "1.1.9"
+version = "1.2.0"
 dependencies = [
  "druid-core",
  "tracing",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "druid-ha"
-version = "1.1.9"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "druid-core",
@@ -427,7 +427,7 @@ dependencies = [
 
 [[package]]
 name = "druid-pool"
-version = "1.1.9"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "criterion",
@@ -440,7 +440,7 @@ dependencies = [
 
 [[package]]
 name = "druid-proxy"
-version = "1.1.9"
+version = "1.2.0"
 dependencies = [
  "druid-core",
  "druid-filter",
@@ -450,7 +450,7 @@ dependencies = [
 
 [[package]]
 name = "druid-sql"
-version = "1.1.9"
+version = "1.2.0"
 dependencies = [
  "druid-core",
  "tracing",
@@ -458,7 +458,7 @@ dependencies = [
 
 [[package]]
 name = "druid-stat"
-version = "1.1.9"
+version = "1.2.0"
 dependencies = [
  "chrono",
  "druid-core",
@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "druid-util"
-version = "1.1.9"
+version = "1.2.0"
 dependencies = [
  "aes-gcm",
  "base64",
@@ -482,7 +482,7 @@ dependencies = [
 
 [[package]]
 name = "druid-wall"
-version = "1.1.9"
+version = "1.2.0"
 dependencies = [
  "druid-core",
  "druid-filter",

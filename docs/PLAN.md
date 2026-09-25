@@ -319,6 +319,7 @@ druid-core ───────────────────────
 ---
 
 **创建日期**: 2026-07-31
-**状态**: 全部阶段已完成 (v1.0.8)
+**状态**: 全部阶段已完成（规划完成于 v1.0.8；当前发布版本 **v1.2.0**）
 **审查报告**: [REVIEW_REPORT.md](REVIEW_REPORT.md)
+**测试报告**: [TEST_REPORT.md](TEST_REPORT.md)
 **基于**: alibaba/druid v1.2.24, coding-to-rust/java-to-rust v2026-07-30

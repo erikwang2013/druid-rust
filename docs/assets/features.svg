@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" width="1000" height="620" role="img" aria-labelledby="drFeatTitle drFeatDesc">
+  <title id="drFeatTitle">Druid-Rust 功能设计</title>
+  <desc id="drFeatDesc">六大功能域：连接池核心、SQL 解析、防火墙、监控统计、可插拔 Filter、高可用与代理。</desc>
+
+  <rect x="0" y="0" width="1000" height="620" rx="14" fill="#0b1b2b"/>
+  <rect x="0.5" y="0.5" width="999" height="619" rx="13.5" fill="none" stroke="#1e3a5f"/>
+
+  <text x="32" y="46" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="20" font-weight="700" fill="#e2e8f0">Druid-Rust 功能设计</text>
+  <text x="32" y="70" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#7c93a8">六大功能域 · 以连接池为核心，通过 Filter 责任链向外扩展</text>
+
+  <!-- 卡片 1 · druid-pool -->
+  <rect x="24" y="96" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#4ade80" stroke-opacity=".38"/>
+  <rect x="44" y="116" width="34" height="3" rx="1.5" fill="#4ade80"/>
+  <text x="44" y="146" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#4ade80">druid-pool</text>
+  <text x="44" y="164" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">连接池核心</text>
+  <line x1="44" y1="178" x2="304" y2="178" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="50" cy="196" r="2.5" fill="#4ade80" fill-opacity=".75"/><text x="62" y="200">Semaphore 精确并发控制</text>
+    <circle cx="50" cy="224" r="2.5" fill="#4ade80" fill-opacity=".75"/><text x="62" y="228">PoolGuard RAII 自动归还</text>
+    <circle cx="50" cy="252" r="2.5" fill="#4ade80" fill-opacity=".75"/><text x="62" y="256">空闲驱逐 + KeepAlive 保活</text>
+    <circle cx="50" cy="280" r="2.5" fill="#4ade80" fill-opacity=".75"/><text x="62" y="284">PSCache 预编译语句缓存</text>
+    <circle cx="50" cy="308" r="2.5" fill="#4ade80" fill-opacity=".75"/><text x="62" y="312">获取超时 · 借还验证</text>
+  </g>
+
+  <!-- 卡片 2 · druid-sql -->
+  <rect x="344" y="96" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#22d3ee" stroke-opacity=".38"/>
+  <rect x="364" y="116" width="34" height="3" rx="1.5" fill="#22d3ee"/>
+  <text x="364" y="146" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#22d3ee">druid-sql</text>
+  <text x="364" y="164" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">SQL 解析引擎</text>
+  <line x1="364" y1="178" x2="624" y2="178" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="370" cy="196" r="2.5" fill="#22d3ee" fill-opacity=".75"/><text x="382" y="200">Lexer：80+ Token 词法分析</text>
+    <circle cx="370" cy="224" r="2.5" fill="#22d3ee" fill-opacity=".75"/><text x="382" y="228">递归下降 Parser + AST</text>
+    <circle cx="370" cy="252" r="2.5" fill="#22d3ee" fill-opacity=".75"/><text x="382" y="256">30 种表达式 · 6 种语句</text>
+    <circle cx="370" cy="280" r="2.5" fill="#22d3ee" fill-opacity=".75"/><text x="382" y="284">30 种数据库方言适配</text>
+    <circle cx="370" cy="308" r="2.5" fill="#22d3ee" fill-opacity=".75"/><text x="382" y="312">Schema 提取 · 格式化输出</text>
+  </g>
+
+  <!-- 卡片 3 · druid-wall -->
+  <rect x="664" y="96" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#fbbf24" stroke-opacity=".38"/>
+  <rect x="684" y="116" width="34" height="3" rx="1.5" fill="#fbbf24"/>
+  <text x="684" y="146" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#fbbf24">druid-wall</text>
+  <text x="684" y="164" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">SQL 防火墙</text>
+  <line x1="684" y1="178" x2="944" y2="178" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="690" cy="196" r="2.5" fill="#fbbf24" fill-opacity=".75"/><text x="702" y="200">危险操作 / 函数黑名单</text>
+    <circle cx="690" cy="224" r="2.5" fill="#fbbf24" fill-opacity=".75"/><text x="702" y="228">UPDATE·DELETE 强制 WHERE</text>
+    <circle cx="690" cy="252" r="2.5" fill="#fbbf24" fill-opacity=".75"/><text x="702" y="256">SELECT INTO OUTFILE 拦截</text>
+    <circle cx="690" cy="280" r="2.5" fill="#fbbf24" fill-opacity=".75"/><text x="702" y="284">多语句 · 长度限制</text>
+    <circle cx="690" cy="308" r="2.5" fill="#fbbf24" fill-opacity=".75"/><text x="702" y="312">LRU 512 检查结果缓存</text>
+  </g>
+
+  <!-- 卡片 4 · druid-stat -->
+  <rect x="24" y="344" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#f472b6" stroke-opacity=".38"/>
+  <rect x="44" y="364" width="34" height="3" rx="1.5" fill="#f472b6"/>
+  <text x="44" y="394" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#f472b6">druid-stat</text>
+  <text x="44" y="412" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">监控统计</text>
+  <line x1="44" y1="426" x2="304" y2="426" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="50" cy="444" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="448">SQL 执行次数 / 耗时 / 错误</text>
+    <circle cx="50" cy="472" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="476">慢 SQL 检测 + tracing 告警</text>
+    <circle cx="50" cy="500" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="504">连接池实时指标</text>
+    <circle cx="50" cy="528" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="532">lock-free AtomicU64 计数</text>
+    <circle cx="50" cy="556" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="560">axum Web 控制台 + JSON 接口</text>
+  </g>
+
+  <!-- 卡片 5 · druid-filter -->
+  <rect x="344" y="344" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#a78bfa" stroke-opacity=".38"/>
+  <rect x="364" y="364" width="34" height="3" rx="1.5" fill="#a78bfa"/>
+  <text x="364" y="394" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#a78bfa">druid-filter</text>
+  <text x="364" y="412" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">可插拔架构</text>
+  <line x1="364" y1="426" x2="624" y2="426" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="370" cy="444" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="448">Filter trait 20+ 钩子</text>
+    <circle cx="370" cy="472" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="476">FilterAdapter 默认空实现</text>
+    <circle cx="370" cy="500" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="504">FilterChain 责任链</text>
+    <circle cx="370" cy="528" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="532">自定义 Filter 扩展</text>
+    <circle cx="370" cy="556" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="560">按名装配 · 动态组合</text>
+  </g>
+
+  <!-- 卡片 6 · druid-ha -->
+  <rect x="664" y="344" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#38bdf8" stroke-opacity=".38"/>
+  <rect x="684" y="364" width="34" height="3" rx="1.5" fill="#38bdf8"/>
+  <text x="684" y="394" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#38bdf8">druid-ha</text>
+  <text x="684" y="412" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">高可用与代理</text>
+  <line x1="684" y1="426" x2="944" y2="426" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="690" cy="444" r="2.5" fill="#38bdf8" fill-opacity=".75"/><text x="702" y="448">加权轮询多数据源</text>
+    <circle cx="690" cy="472" r="2.5" fill="#38bdf8" fill-opacity=".75"/><text x="702" y="476">异步健康检查</text>
+    <circle cx="690" cy="500" r="2.5" fill="#38bdf8" fill-opacity=".75"/><text x="702" y="504">自动故障切换</text>
+    <circle cx="690" cy="528" r="2.5" fill="#38bdf8" fill-opacity=".75"/><text x="702" y="532">mark_down / mark_up 手动切换</text>
+    <circle cx="690" cy="556" r="2.5" fill="#38bdf8" fill-opacity=".75"/><text x="702" y="560">ProxyConnection Filter 拦截</text>
+  </g>
+</svg>
