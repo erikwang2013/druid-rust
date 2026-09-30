@@ -322,3 +322,23 @@ fn test_db_type_serde_renames() {
     let back: DbType = serde_json::from_str("\"sqlserver\"").unwrap();
     assert_eq!(back, DbType::SqlServer);
 }
+
+/// 吉祥物资产防漂移：`docs/assets/mascot.svg`（README 用）与
+/// `druid-console/assets/mascot.svg`（`include_str!` 用）必须字节一致。
+///
+/// 必须有两份副本，因为 `include_str!` 不能引用 crate 目录外的文件——
+/// 那样 `cargo package` 打出的 tarball 会缺文件、编译失败。
+/// 从 registry 解包构建时仓库里的 `docs/` 不存在，此处自动跳过。
+#[test]
+fn mascot_matches_docs_copy() {
+    let docs = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/assets/mascot.svg");
+    if !docs.exists() {
+        return; // 已发布的 tarball 内没有 docs/，跳过
+    }
+    assert_eq!(
+        std::fs::read_to_string(&docs).unwrap(),
+        include_str!("../assets/mascot.svg"),
+        "两份 mascot.svg 已漂移：更新了 docs/assets/ 却忘了 druid-console/assets/"
+    );
+}

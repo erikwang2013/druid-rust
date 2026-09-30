@@ -25,10 +25,12 @@ use druid_stat::StatFilter;
 
 /// 项目宠物「小德」——德鲁伊猫头鹰。
 ///
-/// 与 README 共用同一份 `docs/assets/mascot.svg`，避免资产副本。
-/// 注：跨 crate 目录的 `include_str!` 会让 `cargo package` 失败；
-/// 若将来要发布 druid-console 到 crates.io，把该文件挪进本 crate 即可。
-const MASCOT_SVG: &str = include_str!("../../docs/assets/mascot.svg");
+/// 资产必须放在**本 crate 目录内**：`include_str!` 引用 crate 外的文件会让
+/// `cargo package` 打出的 tarball 缺文件、编译失败，crate 就无法发布。
+/// 仓库里 `docs/assets/mascot.svg` 仍是 README 使用的那份，两者由
+/// `tests.rs::mascot_matches_docs_copy` 保持字节一致（从 registry 解包构建时
+/// 该测试自动跳过）。
+const MASCOT_SVG: &str = include_str!("../assets/mascot.svg");
 
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
