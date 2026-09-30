@@ -1714,6 +1714,8 @@ async fn keepalive_does_not_extend_max_lifetime() {
     .await;
     assert!(g.execute("SELECT 1").await.is_ok(), "新建连接可用");
     drop(g);
+    // 此处可安全断言：驱逐循环未启用，且 keepalive 校验恒成功（不销毁），
+    // 唯一的在途变更只可能是「摘出/回池」，二者都在同一把锁内改 active/idle，快照自洽
     assert_conserved(&ds, "KeepAlive 不延长 max_lifetime");
     ds.close().await.unwrap();
 }

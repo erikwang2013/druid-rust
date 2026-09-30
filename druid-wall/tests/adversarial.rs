@@ -22,6 +22,14 @@
 //! 修法是停止自查、匹配文本改由 `druid-sql` 词法器 token 重建（见 `checker.rs::bare_text`），
 //! 用例已转正为回归锚点 `finding_deny_keywords_blinded_by_double_quoted_string`。
 //! 事务控制放行通道与脱敏白名单本轮未发现可利用缺口（尝试清单与后端实测见对应用例注释）。
+//!
+//! Round 4 状态：**匹配文本改由词法器 token 重建后，deny_keywords 攻不动** ——
+//! 225 例（引号×注释×前缀交叉）放行样本全部经 mysql:8.0.46 仲裁，无一执行到标记物。
+//! 本轮唯一实现改动是 `Variable` token 归入「数据」分支（`@secret` 是变量不是列），
+//! 已用两个后端逐形态仲裁确认不产生少报：见 `test_variable_tokens_are_data_not_code` 与
+//! `test_variable_tokens_do_not_hide_function_calls`（判据与推导写在用例注释里）。
+//! 两条已声明边界（`<fn><注释>(` 拆词、`/*!` 超深）在 `deny_unparsable:false` 下才可达，
+//! 且后端实测不可执行，`git show HEAD:druid-wall/src/checker.rs` 证明其为既有边界。
 
 use druid_core::{DruidConfig, DruidError};
 use druid_filter::Filter;
@@ -885,7 +893,7 @@ fn test_exec_comment_depth_ceiling_denied() {
 /// 无状态文本墙无法安全放行，放行需先做专项风险决策。
 /// 事务控制语句已修复并放行，其断言在 wall_rules.rs 独立用例中。
 #[test]
-#[ignore = "已声明的已知限制：parser 覆盖缺口 + USE/SET 刻意拒绝（金丝雀，固化当前行为）"]
+#[ignore = "已声明的已知限制（非未修缺陷，金丝雀）：parser 覆盖缺口有逃生开关 deny_unparsable:false；USE/SET 属刻意拒绝（会改会话状态，无状态文本墙无法安全放行）。固化当前行为，行为变化时提醒复核"]
 fn known_limit_parser_gaps_and_deliberate_denials() {
     for sql in [
         "SET autocommit=0",
@@ -1039,4 +1047,139 @@ fn non_finding_deep_exec_comment_requires_deny_unparsable_false() {
             "边界行为已变化（若已收窄请更新本用例）：{sql}"
         );
     }
+}
+
+// ── Round 4 决策锚点：`@` 变量 token 归入「数据」分支 ──
+
+/// 决策锚点（deny_keywords 路径）：`@` 变量名是**数据**，不参与匹配。
+///
+/// 判据（与 `checker.rs::bare_text` 同一原则：后端当代码执行 → 保留原文；当数据 → 丢弃）：
+/// `@x` / `@'x'` / `` @`x` `` / `@@x` / `@@global.x` 在后端都是**变量引用**，
+/// 永远不是列引用或函数调用；变量名里含敏感词 ≠ 读到了该列。
+///
+/// 后端实测（mysql:8.0.46 与 mariadb:11.8.9 结论一致）：
+///   `SELECT @secret` / `@'secret'` / `` @`secret` `` / `@x.y`  => rc=0，输出 NULL（变量未赋值）
+///   `SELECT @@secret` / `@@global.secret`                      => rc=1，未知系统变量（不可执行）
+/// 所以放行这些输入不会少报：既不读 `secret` 列，也不改会话状态。
+/// 推导过程：变量 token 曾走 `Display`（回显 `@secret`）→ 命中关键字而**多报**；
+/// 复核两边后端语义后归入数据分支（与 `StringLit`/`HexString` 同处），本用例即该决策的锚点。
+/// 反向保证：只有变量 token 被丢；同一批词出现在**代码位置**仍是 Ident，照拦（见下）。
+#[test]
+fn test_variable_tokens_are_data_not_code() {
+    let cfg = WallConfig {
+        deny_keywords: vec!["secret".into()],
+        ..Default::default()
+    };
+    // 变量位置：后端证明是数据 → 放行（多报已消除）
+    for sql in [
+        "SELECT @secret FROM t",
+        "SELECT @'secret' FROM t",
+        "SELECT @`secret` FROM t",
+        "SELECT @@secret FROM t",
+        "SELECT @@global.secret FROM t",
+        "SELECT @x FROM t ORDER BY @secret",
+        "SELECT @a, @b FROM t",
+    ] {
+        assert!(
+            verdict(cfg.clone(), sql).is_ok(),
+            "变量名是数据，不该按关键字拦：{sql}"
+        );
+    }
+    // 同一批词出现在代码位置（列/表）→ 仍拦，证明放行只限变量 token
+    for sql in [
+        "SELECT secret FROM t",
+        "SELECT @x, secret FROM t",
+        "SELECT secret@x FROM t",
+        "SELECT @x FROM secret",
+        "SELECT @x FROM t WHERE secret = 42",
+        "SELECT secret INTO @x FROM t",
+        "SELECT @x FROM t GROUP BY secret",
+    ] {
+        deny(cfg.clone(), sql, "forbidden");
+    }
+}
+
+/// 决策锚点（deny_functions 路径）：丢弃变量 token **不会**藏住函数调用。
+///
+/// 关键问句「`@sleep(1)` 会不会被后端当 `SLEEP(1)` 执行？」—— 实测不会：
+///   mysql:8.0.46 与 mariadb:11.8.9：`SELECT @sleep(1)` / `@x(1)` / `` @`sleep`(1) `` /
+///   `@'sleep'(1)` / `@x.sleep(1)` / `@x$sleep(1)` / `@@global.sleep(1)` **全部 1064**
+///   （耗时 ~120ms，无延迟），即「变量名吞掉函数名」只能产出语法错误。
+/// 变量名允许 `.`/`_`/`$`（词法器与后端一致）也救不了：`(` 不会附着到变量上。
+/// 真调用 `SLEEP(` 永远是独立 Ident token，`compact` 照样命中。
+#[test]
+fn test_variable_tokens_do_not_hide_function_calls() {
+    let cfg = WallConfig {
+        deny_functions: vec!["sleep".into(), "load_file".into()],
+        ..Default::default()
+    };
+    // 变量名吞函数名 → 后端 1064；墙也拒（unparseable 或 forbidden function 都算拒）
+    for sql in [
+        "SELECT @sleep(1)",
+        "SELECT @x(1)",
+        "SELECT @x.sleep(1)",
+        "SELECT @x.sleep/**/(1)",
+        "SELECT @x$sleep(1)",
+        "SELECT @x_sleep(1)",
+        "SELECT @sleep$(1)",
+        "SELECT @`sleep`(1)",
+        "SELECT @\"sleep\"(1)",
+        "SELECT @'sleep'(1)",
+        "SELECT @@sleep(1)",
+        "SELECT @@global.sleep(1)",
+        "SELECT @sleep/**/(1)",
+        "SELECT @sleep(1) FROM t",
+    ] {
+        deny(cfg.clone(), sql, "");
+    }
+    // 真调用与变量共存 → forbidden function（变量被丢不影响真实 token）
+    for sql in [
+        "SELECT @x, SLEEP(1)",
+        "SELECT SLEEP(@x)",
+        "SELECT @x sleep (1)",
+        "SELECT @x := SLEEP(1)",
+        "SET @x = SLEEP(1)",
+        "SELECT SLEEP(1) INTO @x",
+        "SELECT 1 FROM t WHERE @x = SLEEP(1)",
+        "SELECT @x, LOAD_FILE('/etc/passwd')",
+        "SELECT @x.y.z LOAD_FILE('/etc/passwd')",
+        "SELECT @`x.y`sleep(1)",
+    ] {
+        deny(cfg.clone(), sql, "forbidden function");
+    }
+}
+
+/// 已声明边界（非缺陷）：变量承载**代码**的唯一通道是 PREPARE/EXECUTE，默认配置全被拒。
+///
+/// 实测（mysql:8.0.46，mariadb:11.8.9 同）：
+///   `SET @x='SELECT SLEEP(1)'; PREPARE s FROM @x; EXECUTE s` => rc=0，耗时 1114ms / 1139ms
+///   （SLEEP 真执行）—— 变量确实能承载代码，故这条通道必须堵住「布码」的两步：
+///   `PREPARE s FROM @x`   => DENY（classify 拒绝未知语句类型，两种配置皆是）
+///   `SET @x = '...'`      => DENY（刻意拒绝 SET：会改会话状态，两种配置皆是）
+///   `SET ...; PREPARE ...; EXECUTE s` => DENY（首语句即拒）
+/// 仅 `EXECUTE s` 单条在 `deny_unparsable:false` 下放行；但会话里不存在该语句
+/// （后端实测 mysql：1243 Unknown prepared statement），无法经墙布码 → 不可利用。
+/// 注意：这一边界与「变量当数据」无关 —— PREPARE/SET 在任何变量渲染方式下都被拒。
+#[test]
+fn non_finding_variable_carries_code_only_via_prepare() {
+    let lenient = WallConfig {
+        deny_unparsable: false,
+        ..Default::default()
+    };
+    for sql in [
+        "PREPARE s FROM @x",
+        "SET @x = 'SELECT SLEEP(1)'",
+        "SET @x='SELECT SLEEP(1)'; PREPARE s FROM @x; EXECUTE s",
+    ] {
+        assert!(
+            verdict(WallConfig::default(), sql).is_err(),
+            "默认配置必须拦下布码语句：{sql}"
+        );
+        assert!(
+            verdict(lenient.clone(), sql).is_err(),
+            "非默认配置也必须拦下布码语句（classify 拒绝）：{sql}"
+        );
+    }
+    // 边界固化：`EXECUTE s` 单条在非默认配置放行（会话内无 s，执行即 1243）
+    assert!(verdict(lenient.clone(), "EXECUTE s").is_ok());
 }

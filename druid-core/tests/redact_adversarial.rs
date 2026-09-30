@@ -12,10 +12,27 @@
 //! 现在：分隔符覆盖 `& ; ,` 与全部空白，每段独立判定；键名只有白名单/已知敏感标签
 //! 才回显；没有 `=` 的裸文本在参数区一律打码；userinfo 判定用 `@`/`%40` 且只作用于
 //! 不在参数值里的分隔符（`?email=a@b.com` 不再吞掉主机名）。
-//! → Round 4（当前）：逐段判定被唯一一处例外破坏 —— `userinfo_at` 对「最后一个 `@`
-//! 落在 `k=v` 值里」的豁免作用于**整串**，后段一个邮箱就能让前面的 `u:p@` 明文输出。
-//! 见文件顶部 `finding_userinfo_masking_disabled_by_later_param_value`（`#[ignore]` 留证）。
-//! 下方四组用例是第一轮 `#[ignore]` 留证的转正（原名 `finding_*`，现名 `masked_*`）。
+//! → Round 4：逐段判定被唯一一处例外破坏 —— `userinfo_at` 对「最后一个 `@` 落在
+//! `k=v` 值里」的豁免作用于**整串**，后段一个邮箱就能让前面的 `u:p@` 明文输出。
+//! **已修复**：`userinfo_at` 改为从右往左取第一个**非**参数值里的 `@`/`%40`，
+//! 豁免只作用于被豁免的那个分隔符本身，判定范围 = 作用范围。
+//! 回归用例见 `masked_userinfo_beside_param_value`（原 `finding_*`），对照组
+//! `masked_controls_next_to_the_userinfo_exemption` 保持绿。
+//! → Round 5：两段**从未被判定过**却原样输出的文本。
+//!   (a) `://` 之前的 scheme 段被当成「结构性位置」——它其实可判定
+//!   （`k=jdbc:mysql://h` 与 `k=<口令>://h` 只在内容上不同）；
+//!   (b) 敏感键名的回显走子串匹配，子串能匹配任意文本 → `<口令>pass=x` 键名整段打印。
+//! **均已修复**：`SAFE_SCHEME_LABELS` / `SENSITIVE_KEY_LABELS` 精确白名单
+//! （scheme 还要 `:` 逐段比对），未知的一律打码。scheme 因此退出
+//! `declared_tradeoffs_are_bounded` 的取舍，回到「承诺打码」。
+//! 回归用例：`masked_scheme_position`、`masked_key_label_position`。
+//! 至此同源缺陷的全部三次露头（Round 3 首键放行整串、Round 4 一个 `@` 放行整串、
+//! Round 5 未判定的 scheme 段/键名段）都收敛为
+//! 「**判定范围 = 作用范围，每一段都要判定**」；剩下的原样输出只有
+//! `declared_tradeoffs_are_bounded` 里钉住的用户名/host/库名三个位置与白名单键值。
+//!
+//! 本文件当前没有被忽略的用例：所有历史发现要么已修复转正（`masked_*` 回归锚点），
+//! 要么是 `declared_tradeoffs_are_bounded` 里显式钉住的已声明限制。
 
 use druid_core::DruidConfig;
 
@@ -46,23 +63,21 @@ fn leaking_props(props: &[&str]) -> Vec<String> {
         .collect()
 }
 
-// ══════════ Round 4（当前）：逐段判定的唯一边界 —— userinfo 豁免 ══════════
+// ══════════ Round 4：userinfo 豁免的作用范围（已修复） ══════════
 
-/// **Round 4 发现（本轮唯一，置顶留证）**：`userinfo_at` 的「这个 `@` 属于参数值」
-/// 豁免会关掉**整条串**的 userinfo 打码 → 真正的凭据整段原样输出。
+/// **Round 4 发现（已修复）**：`userinfo_at` 的「这个 `@` 属于参数值」豁免会关掉
+/// **整条串**的 userinfo 打码 → 真正的凭据整段原样输出。
 ///
-/// 机制（`druid-core/src/redact.rs:121` 与 `:158`）：`userinfo_at` 取最后一个
-/// `@`/`%40`，回看它所在段是否形如 `k=v`（键不含 `:`）；是则返回 `None`，
-/// `mask_rest` 据此**跳过 `mask_cred`** —— 位于串**开头**的 `user:pass@host` 一并放行。
-/// 判定只看最后一个 `@` 所在的那一段，作用范围却是整串，与文件头「逐段判定」的原则不符。
+/// 机制（旧实现）：`userinfo_at` 只取**最后一个** `@`/`%40`，回看它所在段是否形如
+/// `k=v`（键不含 `:`）；是则返回 `None`，`mask_rest` 据此**跳过 `mask_cred`** ——
+/// 位于串开头的 `user:pass@host` 一并放行。判定只看最后一个 `@` 所在的那一段，
+/// 作用范围却是整串，与「逐段判定」的原则不符（与 Round 3 的「首键放行整串」同源）。
 ///
-/// 触发条件：连接串后段任意一个 `k=v` 参数的值里带 `@`（邮箱、`url=`、`a@b`）。
-/// 真实性：中低（需要连接串恰好长这样），但一旦命中就是完整凭据明文进日志。
-/// 修法方向（供参考，不在本轮范围）：userinfo 判定限定在 authority 段（第一个 `/` 之前），
-/// 且 `k=v` 豁免只作用于**该段之后**的 `@`。
+/// 修法：从右往左取第一个**非**参数值里的 `@`/`%40`，豁免只作用于被豁免的那个分隔符
+/// 本身。对照组 `masked_controls_next_to_the_userinfo_exemption` 证明：移除后段那个
+/// `@` 后行为不变，本组泄漏确由该豁免触发。
 #[test]
-#[ignore = "Round 4 发现：后段参数值里的 @ 关闭整串 userinfo 打码，凭据原样泄漏"]
-fn finding_userinfo_masking_disabled_by_later_param_value() {
+fn masked_userinfo_beside_param_value() {
     let leaks = leaking_urls(&[
         "jdbc:mysql://root:S3CRET-D0-NOT-LEAK-7f21@host/db?email=a@b.com",
         "jdbc:mysql://root:S3CRET-D0-NOT-LEAK-7f21@host/db?a=1&email=a@b.com",
@@ -106,22 +121,99 @@ fn masked_controls_next_to_the_userinfo_exemption() {
     );
 }
 
-/// 声明的取舍（非缺陷，Round 4 复核，两侧都钉住）：
-///   1. authority/路径里的**裸文本**可读 —— `jdbc:mysql://SECRET/db` 与
-///      `jdbc:mysql://myhost/db` 文本上不可区分，保留主机名/库名才有排障价值。
-///      承诺打码的只有 userinfo（`u:p@`）与 `k=v` 的值位置。
+// ══════════ Round 5：scheme 位置（可判定 → fail-closed，已修复） ══════════
+
+/// **Round 5 发现（已修复）**：`sanitize_url` 原样输出 `://` 之前、最后一个分隔符/`=`
+/// 之后的那截（"scheme"）。它不是结构性的：`k=SECRET://host` 里 `://` 之前就是口令，
+/// 且与 `k=jdbc:mysql://host` 只在内容上不同 —— 判定得了，就不该按「结构性位置」放行。
+///
+/// 旧输出：`jdbcUrl=<口令>://host/db` → `***=<口令>://host/db`。
+/// 修法：`is_safe_scheme` 按 `:` **逐段**比对 `SAFE_SCHEME_LABELS`，未知标签整段打码。
+/// 逐段而非只看首段：`jdbc:SECRET://h` 不能因为 `jdbc` 在白名单里就放行整个 scheme 段
+/// （与 Round 3「首键放行整串」、Round 4「一个 `@` 放行整串」同一根因的第三次露头）。
+#[test]
+fn masked_scheme_position() {
+    let leaks = leaking_urls(&[
+        "S3CRET-D0-NOT-LEAK-7f21://host/db",
+        "jdbc:S3CRET-D0-NOT-LEAK-7f21://host/db",
+        "jdbc:mysql:S3CRET-D0-NOT-LEAK-7f21://host/db",
+        "jdbc:mysql://host/db?url=S3CRET-D0-NOT-LEAK-7f21://h2/db",
+    ]);
+    let prop_leaks = leaking_props(&[
+        "jdbcUrl=S3CRET-D0-NOT-LEAK-7f21://host/db",
+        "url=S3CRET-D0-NOT-LEAK-7f21://host/db",
+    ]);
+    assert!(
+        leaks.is_empty() && prop_leaks.is_empty(),
+        "scheme 位置口令原样打印：\nURL 形态 {leaks:#?}\n属性形态 {prop_leaks:#?}"
+    );
+
+    // 已知 scheme 必须原样保留（白名单不能退化成把 scheme 也打掉）
+    for (url, want) in [
+        ("jdbc:mysql://h:3306/db", "jdbc:mysql://h:3306/db"),
+        ("jdbc:sqlserver://h/db", "jdbc:sqlserver://h/db"),
+        ("https://h/x", "https://h/x"),
+        ("jdbc:mysql://root:***@h/db", "jdbc:mysql://root:***@h/db"),
+    ] {
+        assert!(debug_of(url, &[]).contains(want), "{url} → 期望包含 {want}");
+    }
+}
+
+/// **Round 5 发现（已修复，同轮第二个面）**：敏感键名的回显走的是**子串**匹配
+/// （`SENSITIVE_KEY_HINTS`），而子串能匹配任意文本 —— `<口令>pass=x` 的键名整段就是口令，
+/// 却因为含 "pass" 被当成"已知标签"原样打印（与 Round 3「未知键名不回显」同一个面，
+/// 只是被子串启发式绕开了）。
+///
+/// 修法：判断「值要不要打码」仍用子串启发式（方向是 fail-closed，多打没错）；
+/// 判断「键名能不能回显」改为**精确**白名单 `SENSITIVE_KEY_LABELS` —— 与
+/// `SAFE_PARAM_KEYS` 同一套约定：认不出来就打码。代价是非精确的敏感键名
+/// （`mydb_password=xxx`）不再显示键名；值本来就打码，可以接受。
+#[test]
+fn masked_key_label_position() {
+    let leaks = leaking_urls(&[
+        "jdbc:mysql://host/db?S3CRET-D0-NOT-LEAK-7f21pass=x",
+        "jdbc:mysql://host/db?passwordS3CRET-D0-NOT-LEAK-7f21=x",
+        "jdbc:mysql://host/db;S3CRET-D0-NOT-LEAK-7f21token=x",
+    ]);
+    let prop_leaks = leaking_props(&[
+        "S3CRET-D0-NOT-LEAK-7f21pass=x",
+        "mydb_password=S3CRET-D0-NOT-LEAK-7f21",
+    ]);
+    assert!(
+        leaks.is_empty() && prop_leaks.is_empty(),
+        "键名位置口令原样打印：\nURL 形态 {leaks:#?}\n属性形态 {prop_leaks:#?}"
+    );
+    // 精确已知的敏感标签仍回显（排障要知道"哪个键被打码了"）
+    assert!(
+        debug_of("jdbc:mysql://host/db?password=x", &[]).contains("?password=***"),
+        "已知敏感标签被过度打码"
+    );
+}
+
+/// 声明的已知限制（**不是**未修缺陷，两侧都钉住）：
+///   1. **结构性位置**（用户名、host、库名）按 URI 语义可读。它们与任意 token
+///      在文本上不可区分（`jdbc:mysql://SECRET/db` 与 `jdbc:mysql://myhost/db` 同形，
+///      `SECRET:x@h` 与 `root:x@h` 同形），要打码就得连主机名/库名/用户名一起打掉 ——
+///      而「用户名保留」正是本文件锚点 `root:***@h/db` 明确要求的。可接受的代价：
+///      正常配置里口令不会放在这些位置；一旦放了，本用例会红，提醒更新注释而非静默漂移。
+///      **承诺打码的只有口令位置**：userinfo 冒号之后、`k=v` 的值位置。
 ///   2. 白名单键（`user=`/`host=`/`Server=`…）的值按设计可读 —— 但值里出现
 ///      `@`/`%40` 或 `://` 时强制打码（凭据可能漏进了值）。
+///   3. （Round 5）scheme 位置**不在**上面的取舍里：它与 `k=v` 的键名同源，可以判定，
+///      所以按 `SAFE_SCHEME_LABELS` fail-closed 白名单处理，未知标签整段打码 ——
+///      见 `masked_scheme_position`。
 #[test]
 fn declared_tradeoffs_are_bounded() {
     for url in [
+        // host / 库名 / 用户名 三个结构性位置
         "jdbc:mysql://S3CRET-D0-NOT-LEAK-7f21/db",
         "jdbc:mysql://host/S3CRET-D0-NOT-LEAK-7f21",
+        "jdbc:mysql://S3CRET-D0-NOT-LEAK-7f21:pw@host/db",
     ] {
         let out = debug_of(url, &[]);
         assert!(
             out.contains("S3CRET-D0-NOT-LEAK-7f21"),
-            "声明「裸 authority/路径可读」已被打破（现在是 {out}）——若是有意收紧请更新注释"
+            "声明「结构性位置可读」已被打破（现在是 {out}）——若是有意收紧请更新注释"
         );
     }
     let out = debug_of("jdbc:mysql://host/db", &["user=S3CRET-D0-NOT-LEAK-7f21"]);

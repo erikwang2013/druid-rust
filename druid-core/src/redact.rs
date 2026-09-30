@@ -74,8 +74,21 @@ const SAFE_PARAM_KEYS: &[&str] = &[
     "useinformationschema",
 ];
 
-/// 已知敏感的键名子串（大小写不敏感）：命中即打码值。键名本身是已知标签，保留便于排障。
+/// 已知敏感的键名子串（大小写不敏感）：命中即打码**值**。
+/// 回显键名另走 `SENSITIVE_KEY_LABELS` 精确匹配 —— 子串判定不足以证明键名是标签。
 const SENSITIVE_KEY_HINTS: [&str; 4] = ["pass", "pwd", "secret", "token"];
+
+/// 已知安全的 scheme 标签（空格分隔，小写）：按 `:` 拆开后**逐段**比对，
+/// `jdbc:oracle:thin` 三段都要在表里。覆盖 `druid-util::sql::detect_db_type_from_url`
+/// 认识的驱动，外加 http(s)。与键名同一套 fail-closed 约定 —— scheme 位置放着口令时
+/// 与 `mysql`/`jdbc` 同形，认不出来就打码（未知驱动打码后 host/库名仍可读；确认安全再加一个词）。
+///
+/// 必须**精确**匹配：`detect_db_type_from_url` 用子串识别驱动（便于使用），照搬会放行
+/// `<口令>mysql://h` 这类输入。
+const SAFE_SCHEME_LABELS: &str = "jdbc mysql mariadb postgres postgresql oracle thin oci \
+    sqlserver mssql db2 h2 clickhouse doris starrocks hive hive2 presto impala snowflake \
+    bigquery redshift spark phoenix teradata informix informix-sqli athena gaussdb dameng \
+    dm odps maxcompute hologres sqlite redis mongodb mongo http https";
 
 /// 段分隔符：`&`/`;`/`,`/`|` 与所有空白（URL、ADO.NET、MySQL 选项文件、libmysql DSN）
 fn is_sep(c: char) -> bool {
@@ -96,10 +109,30 @@ fn is_safe_key(key: &str) -> bool {
     SAFE_PARAM_KEYS.contains(&key.trim().to_ascii_lowercase().as_str())
 }
 
-/// 键名标签：白名单与已知敏感键可回显，其余 `***`（键位置可能就是口令本身）
+/// scheme 段是否可回显：`:` 拆开后**每一段**都要在白名单里。
+/// 只看第一段会放过 `jdbc:SECRET` —— 判定范围必须覆盖整个 scheme 段，而不是它的一段。
+fn is_safe_scheme(scheme: &str) -> bool {
+    scheme.split(':').all(|l| {
+        let l = l.to_ascii_lowercase();
+        SAFE_SCHEME_LABELS.split(' ').any(|s| s == l)
+    })
+}
+
+/// 可回显的敏感键名（空格分隔，小写**精确**匹配）：只决定**标签**能不能回显。
+/// 子串启发式（`SENSITIVE_KEY_HINTS`）只用来判断「值要不要打码」—— 它匹配的是任意文本，
+/// 拿它决定回显等于把键名位置的口令原样放行（`<口令>pass=x` 的键名整段是口令）。
+const SENSITIVE_KEY_LABELS: &str = "password passwd pwd pass secret token accesstoken access_token";
+
+/// 键名是否**精确**等于已知敏感标签（大小写不敏感）
+fn is_sensitive_label(key: &str) -> bool {
+    let k = key.trim().to_ascii_lowercase();
+    SENSITIVE_KEY_LABELS.split(' ').any(|s| s == k)
+}
+
+/// 键名标签：白名单与精确已知的敏感键可回显，其余 `***`（键位置可能就是口令本身）
 fn key_label(key: &str) -> &str {
     let k = key.trim();
-    if is_safe_key(k) || is_sensitive_key(k) {
+    if is_safe_key(k) || is_sensitive_label(k) {
         k
     } else {
         "***"
@@ -114,30 +147,33 @@ fn has_userinfo_mark(v: &str) -> bool {
             .any(|w| w.eq_ignore_ascii_case(b"%40"))
 }
 
-/// 找 userinfo 分隔符：最后一个 `@` 或 `%40`，且它**不在 `k=v` 的值里**。
+/// 找 userinfo 分隔符：从右往左，第一个**不属于参数值**的 `@` 或 `%40`。
 ///
-/// `?email=a@b.com` 的 `@` 属于参数值（不该触发 userinfo 打码，否则主机名被吞）；
+/// 逐个候选回看，而不是只看最后一个：`?email=a@b.com` 的 `@` 落在 `k=v` 值里，
+/// 该豁免只作用于**它自己** —— 不能因此关掉整串的判定，否则它前面的
+/// `root:pass@host` 会被当成"已验证安全"整段放行。判定范围必须等于作用范围，
+/// 这是「逐段判定」在本模块的最后一块拼图。
+///
 /// `?x=a:SECRET@h` 这类 key 里带冒号的仍按凭据处理 —— 宁可多打。
 fn userinfo_at(s: &str) -> Option<usize> {
-    let enc = s
-        .as_bytes()
-        .windows(3)
-        .rposition(|w| w.eq_ignore_ascii_case(b"%40"));
-    let at = match (s.rfind('@'), enc) {
-        (Some(a), Some(e)) => Some(a.max(e)),
-        (a, e) => a.or(e),
-    }?;
+    let b = s.as_bytes();
+    for i in (0..b.len()).rev() {
+        let enc = i + 3 <= b.len() && b[i..i + 3].eq_ignore_ascii_case(b"%40");
+        if (b[i] == b'@' || enc) && !is_param_value_at(s, i) {
+            return Some(i);
+        }
+    }
+    None
+}
+
+/// `at` 处的 `@`/`%40` 是否落在参数区的 `k=v` 值里（`?email=a@b.com` 属于值，不是凭据）
+fn is_param_value_at(s: &str, at: usize) -> bool {
     let head = &s[..at];
     let seg_start = head.rfind(['?', '#', ';', '&', ',']).map_or(0, |p| p + 1);
-    let is_value = head[seg_start..]
+    head[seg_start..]
         .trim()
         .split_once('=')
-        .is_some_and(|(k, _)| !k.contains(':'));
-    if is_value {
-        None
-    } else {
-        Some(at)
-    }
+        .is_some_and(|(k, _)| !k.contains(':'))
 }
 
 /// 凭据部分打码：`@` 之前一律按凭据处理。
@@ -191,7 +227,13 @@ pub(crate) fn sanitize_url(url: &str) -> String {
         return sanitize_thin(url, false);
     };
     let (lead, head) = split_lead(&url[..i]);
+    // scheme 段按白名单判定：`k=SECRET://host` 里 `://` 之前的那截就是口令本身
     let scheme = &url[head..i];
+    let scheme = if is_safe_scheme(scheme) {
+        scheme
+    } else {
+        "***"
+    };
     format!("{lead}{scheme}://{}", mask_rest(&url[i + 3..]))
 }
 
@@ -249,7 +291,8 @@ fn sanitize_segment(seg: &str, in_params: bool) -> String {
         return if in_params { "***".into() } else { seg.into() };
     };
     if is_sensitive_key(k) {
-        return format!("{k}=***");
+        // 键名同样要判定：精确已知才回显（`<口令>pass` 这类只能匹配到子串，整段打码）
+        return format!("{}=***", key_label(k));
     }
     if is_safe_key(k) {
         if v.contains("://") {
@@ -302,6 +345,12 @@ mod tests {
                 // 无字面量 `@`：%40 编码、无冒号的 `口令@host`
                 "jdbc:mysql://root:S3CRET-D0-NOT-LEAK-7f21%40host/db",
                 "S3CRET-D0-NOT-LEAK-7f21@host:3306",
+                // 后段参数值里再带 `@`：豁免只作用于那个 `@`，不许关掉整串判定
+                "jdbc:mysql://root:S3CRET-D0-NOT-LEAK-7f21@host/db?email=a@b.com",
+                "jdbc:mysql://root:S3CRET-D0-NOT-LEAK-7f21@host/db?url=jdbc:mysql://u:p@h2",
+                "jdbc:mysql://root:S3CRET-D0-NOT-LEAK-7f21@host/db;a=1&email=a@b.com",
+                "root:S3CRET-D0-NOT-LEAK-7f21@h:3306?x=a@b",
+                "url=jdbc:mysql://root:S3CRET-D0-NOT-LEAK-7f21@h/db?email=a@b.com",
             ],
             sanitize_url,
         );
@@ -347,12 +396,40 @@ mod tests {
                 "jdbc:mysql://host/db?S3CRET-D0-NOT-LEAK-7f21=x",
                 "jdbc:mysql://host/db#S3CRET-D0-NOT-LEAK-7f21=x",
                 "jdbc:mysql://host/db?junk/user=S3CRET-D0-NOT-LEAK-7f21",
+                // 键名位置的口令：即使只匹配到敏感子串（pass/secret/token）也整段打码
+                "jdbc:mysql://host/db?S3CRET-D0-NOT-LEAK-7f21pass=x",
+                "jdbc:mysql://host/db?passwordS3CRET-D0-NOT-LEAK-7f21=x",
             ],
             sanitize_url,
         );
         assert_eq!(
             sanitize_url("jdbc:mysql://host/db?credential=S3CRET"),
             "jdbc:mysql://host/db?***=***"
+        );
+        // 非精确的敏感键名（含子串但非已知标签）连键名一起打码 —— 代价是不再显示键名
+        assert_eq!(
+            sanitize_url("jdbc:mysql://host/db?mydb_password=x"),
+            "jdbc:mysql://host/db?***=***"
+        );
+    }
+
+    /// scheme 位置与口令同形：只认白名单，`jdbc:mysql` 保留，未知标签整段打码
+    #[test]
+    fn scheme_position_is_masked_unless_known() {
+        assert_masked(
+            &[
+                "S3CRET-D0-NOT-LEAK-7f21://host/db",
+                "jdbc:S3CRET-D0-NOT-LEAK-7f21://host/db",
+                "jdbc:mysql:S3CRET-D0-NOT-LEAK-7f21://host/db",
+            ],
+            sanitize_value,
+        );
+        assert_eq!(sanitize_url("S3CRET://host/db"), "***://host/db");
+        // 白名单 scheme 原样保留（脱敏不能退化成全打码）
+        assert_eq!(sanitize_url("https://host/x"), "https://host/x");
+        assert_eq!(
+            sanitize_url("jdbc:sqlserver://h/db"),
+            "jdbc:sqlserver://h/db"
         );
     }
 

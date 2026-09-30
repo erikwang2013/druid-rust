@@ -2,6 +2,39 @@
 
 All notable changes to Druid-Rust.
 
+## [1.3.1] - 2026-10-01
+
+> 1.3.0 发布当日跟进的补丁。1.3.0 的对抗验证在发布后又挖出 **5 组 `DruidConfig` Debug
+> 明文口令泄漏**与 1 个打包缺陷，本版一并修复。
+
+### Fixed — 安全（`DruidConfig` 的 `Debug` 输出泄露口令）
+
+1.3.0 已把脱敏从黑名单改为"逐段判定"，但对**判定范围与作用范围不一致**的边界仍漏了三次
+（第一次在 1.3.0 内已修，后两次是本版修的）：
+
+- **userinfo 旁边的参数值**：`userinfo_at` 取的是**最后一个** `@`，只看它所在段是否形如 `k=v`；
+  是则**整串**跳过凭据打码 → `jdbc:mysql://root:<pw>@host/db?email=a@b.com` 的口令原样输出。
+  现改为从右往左取第一个**不在参数值里**的 `@`/`%40`，豁免只作用于该分隔符本身。
+- **scheme 段从未被判定**：`jdbcUrl=<口令>://host/db` 中 `://` 之前的整截被当"结构性位置"原样输出。
+  现按 `SAFE_SCHEME_LABELS` 白名单 + `:` 逐段比对，未知标签整段打码（对照：`detect_db_type_from_url`
+  是子串匹配，直接复用会放行 `<口令>mysql://h`）。
+- **键名标签走子串匹配**：`?<口令>pass=x` 的键名整段是口令，却因含 `pass` 被当已知标签**原样打印**。
+  现「值要不要打码」仍用子串（fail-closed，多打无妨），「键名能不能回显」改为精确白名单。
+
+三次同源缺陷收敛为一条原则：**每一段都要判定，判定范围 = 作用范围**，且由
+`declared_tradeoffs_are_bounded` 把三处结构性可读位置（用户名 / host / 库名）逐个钉住。
+
+### Fixed — 打包
+
+- **`druid-console` 此前无法发布**：`include_str!("../../docs/assets/mascot.svg")` 引用 crate
+  目录外的文件，`cargo package` 打出的 tarball 缺文件、编译失败。资产移入 `druid-console/assets/`，
+  并加防漂移测试保证与 `docs/assets/mascot.svg` 字节一致（从 registry 解包构建时自动跳过）。
+
+### Added
+
+- **`druid-wall` 与 `druid-console` 首次发布到 crates.io**（1.3.0 因限流与打包缺陷未上架）。
+- 10 个 crate 补 `readme` 字段，crates.io 页面显示项目 README。
+
 ## [1.3.0] - 2026-10-01
 
 > 本次为**深度审查 + 对抗验证**后的集中修复。审查（4 名审查员）与分析（2 名对抗验证员、3 轮）

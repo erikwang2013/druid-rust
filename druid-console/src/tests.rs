@@ -331,8 +331,8 @@ fn test_db_type_serde_renames() {
 /// 从 registry 解包构建时仓库里的 `docs/` 不存在，此处自动跳过。
 #[test]
 fn mascot_matches_docs_copy() {
-    let docs = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../docs/assets/mascot.svg");
+    let docs =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/assets/mascot.svg");
     if !docs.exists() {
         return; // 已发布的 tarball 内没有 docs/，跳过
     }
