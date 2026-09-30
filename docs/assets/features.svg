@@ -75,7 +75,7 @@
     <circle cx="370" cy="472" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="476">FilterAdapter 默认空实现</text>
     <circle cx="370" cy="500" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="504">FilterChain 责任链</text>
     <circle cx="370" cy="528" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="532">自定义 Filter 扩展</text>
-    <circle cx="370" cy="556" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="560">按名装配 · 动态组合</text>
+    <circle cx="370" cy="556" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="560">构造期注入 · 动态组合</text>
   </g>
 
   <!-- 卡片 6 · druid-ha -->

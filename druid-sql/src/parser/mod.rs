@@ -15,21 +15,40 @@ pub trait SQLParser {
     fn parse_expr(&mut self) -> ParseResult<SQLExpr>;
 }
 
+/// 递归深度上限 —— 递归下降每层嵌套消耗多个栈帧，
+/// 不设上限时超深嵌套（如几万个括号）会栈溢出 SIGSEGV，进程不可恢复
+const MAX_DEPTH: usize = 128;
+
 /// 核心解析器（不特定于方言）
 pub struct Parser {
     lexer: Lexer,
     current: Token,
+    /// 当前递归深度，由 parse_select/parse_expr/parse_primary 等递归入口维护
+    depth: usize,
 }
 
 impl Parser {
     pub fn new(sql: &str) -> Self {
         let mut lexer = Lexer::new(sql);
         let current = lexer.next_token();
-        Parser { lexer, current }
+        Parser {
+            lexer,
+            current,
+            depth: 0,
+        }
     }
 
     fn advance(&mut self) {
         self.current = self.lexer.next_token();
+    }
+
+    /// 进入一层递归：超过上限立即返回 Err，返回前调用方负责 depth -= 1
+    fn enter_depth(&mut self) -> ParseResult<()> {
+        if self.depth >= MAX_DEPTH {
+            return Err(format!("SQL nesting too deep (> {MAX_DEPTH})"));
+        }
+        self.depth += 1;
+        Ok(())
     }
 
     fn expect(&mut self, expected: Token) -> ParseResult<()> {
@@ -50,18 +69,48 @@ impl Parser {
     /// 解析单个 SQL 语句
     pub fn parse_statement(&mut self) -> ParseResult<SQLStatement> {
         self.skip_comments();
-        match &self.current {
-            Token::Select | Token::With => Ok(SQLStatement::Select(Box::new(self.parse_select()?))),
-            Token::Insert | Token::Replace => Ok(SQLStatement::Insert(self.parse_insert()?)),
-            Token::Update => Ok(SQLStatement::Update(self.parse_update()?)),
-            Token::Delete => Ok(SQLStatement::Delete(self.parse_delete()?)),
-            Token::Create => Ok(SQLStatement::CreateTable(self.parse_create_table()?)),
-            Token::Drop => Ok(SQLStatement::DropObject(self.parse_drop()?)),
-            _ => Err(format!("unexpected token: {:?}", self.current)),
+        self.check_lex_error()?;
+        // EXPLAIN [ANALYZE] 前缀剥离，内层语句按原类型返回：
+        // MySQL 8.0.32+ 的 EXPLAIN ANALYZE 会真正执行语句（EXPLAIN ANALYZE DELETE 会删数据），
+        // 因此必须让内层语句暴露成它本来的类型（DELETE 就按 DELETE 判定），而不是包一层。
+        if self.current == Token::Explain {
+            self.advance();
+            if self.current == Token::Analyze {
+                self.advance();
+            }
+            self.skip_comments();
+            return self.parse_statement();
+        }
+        let stmt = match &self.current {
+            Token::Select | Token::With => SQLStatement::Select(Box::new(self.parse_select()?)),
+            Token::Insert | Token::Replace => SQLStatement::Insert(self.parse_insert()?),
+            Token::Update => SQLStatement::Update(self.parse_update()?),
+            Token::Delete => SQLStatement::Delete(self.parse_delete()?),
+            Token::Create => SQLStatement::CreateTable(self.parse_create_table()?),
+            Token::Drop => SQLStatement::DropObject(self.parse_drop()?),
+            _ => return Err(format!("unexpected token: {:?}", self.current)),
+        };
+        self.check_lex_error()?;
+        Ok(stmt)
+    }
+
+    /// 词法失败（当前只有可执行注释超深一种）会让 token 流提前截断：
+    /// 语句本身可能"看起来解析成功"，但被丢弃的内容上层看不见，必须报错（fail-closed）
+    fn check_lex_error(&mut self) -> ParseResult<()> {
+        match self.lexer.take_error() {
+            Some(e) => Err(e),
+            None => Ok(()),
         }
     }
 
     fn parse_select(&mut self) -> ParseResult<SelectStatement> {
+        self.enter_depth()?;
+        let result = self.parse_select_inner();
+        self.depth -= 1;
+        result
+    }
+
+    fn parse_select_inner(&mut self) -> ParseResult<SelectStatement> {
         let mut distinct = false;
         let mut with_cte = Vec::new();
         if self.current == Token::With {
@@ -177,19 +226,31 @@ impl Parser {
             Vec::new()
         };
 
-        let limit = if self.current == Token::Limit {
+        let mut limit = if self.current == Token::Limit {
             self.advance();
             Some(self.parse_expr()?)
         } else {
             None
         };
 
-        let offset = if self.current == Token::Offset {
+        // MySQL 的 LIMIT offset, count 写法：逗号前是偏移量，逗号后才是行数
+        let mut offset = if self.current == Token::Comma {
             self.advance();
-            Some(self.parse_expr()?)
+            let count = self.parse_expr()?;
+            let skip = limit.take();
+            limit = Some(count);
+            skip
         } else {
             None
         };
+
+        if self.current == Token::Offset {
+            self.advance();
+            if offset.is_some() {
+                return Err("LIMIT offset, count cannot be combined with OFFSET".to_string());
+            }
+            offset = Some(self.parse_expr()?);
+        }
 
         Ok(SelectStatement {
             with_cte,
@@ -366,7 +427,10 @@ impl Parser {
     }
 
     pub fn parse_expr(&mut self) -> ParseResult<SQLExpr> {
-        self.parse_or_expr()
+        self.enter_depth()?;
+        let result = self.parse_or_expr();
+        self.depth -= 1;
+        result
     }
 
     fn parse_or_expr(&mut self) -> ParseResult<SQLExpr> {
@@ -384,10 +448,10 @@ impl Parser {
     }
 
     fn parse_and_expr(&mut self) -> ParseResult<SQLExpr> {
-        let mut left = self.parse_comparison()?;
+        let mut left = self.parse_not_expr()?;
         while self.current == Token::And {
             self.advance();
-            let right = self.parse_comparison()?;
+            let right = self.parse_not_expr()?;
             left = SQLExpr::BinaryOp {
                 left: Box::new(left),
                 op: BinaryOpType::And,
@@ -395,6 +459,25 @@ impl Parser {
             };
         }
         Ok(left)
+    }
+
+    /// NOT 前缀：优先级低于比较运算符（SQL 标准 / MySQL / PG），
+    /// 因此 NOT a = 1 是 NOT (a = 1)，NOT x LIKE 'a%' 是 NOT (x LIKE 'a%')。
+    /// 若把 NOT 放在 parse_primary 里，NOT 只会吃掉一个 primary，
+    /// 后面的 =/IN/LIKE/BETWEEN 会拼在 NOT 外面（NOT name LIKE 'a%' 变成 (NOT name) LIKE 'a%'，
+    /// 恒 false 导致静默少返回数据）。
+    fn parse_not_expr(&mut self) -> ParseResult<SQLExpr> {
+        if self.current == Token::Not {
+            self.enter_depth()?;
+            self.advance();
+            let inner = self.parse_not_expr();
+            self.depth -= 1;
+            return Ok(SQLExpr::UnaryOp {
+                op: UnaryOpType::Not,
+                expr: Box::new(inner?),
+            });
+        }
+        self.parse_comparison()
     }
 
     fn parse_comparison(&mut self) -> ParseResult<SQLExpr> {
@@ -586,6 +669,13 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> ParseResult<SQLExpr> {
+        self.enter_depth()?;
+        let result = self.parse_primary_inner();
+        self.depth -= 1;
+        result
+    }
+
+    fn parse_primary_inner(&mut self) -> ParseResult<SQLExpr> {
         match &self.current {
             Token::Ident(name) => {
                 let name = name.clone();
@@ -635,8 +725,14 @@ impl Parser {
                 self.advance();
                 if self.current == Token::Dot {
                     self.advance();
-                    let col = self.parse_ident()?;
-                    Ok(SQLExpr::Identifier(vec![name, col]))
+                    if self.current == Token::Mul {
+                        // `t`.* — 与 Ident 分支对称，parse_select_items 还原为 Wildcard
+                        self.advance();
+                        Ok(SQLExpr::Identifier(vec![name, "*".to_string()]))
+                    } else {
+                        let col = self.parse_ident()?;
+                        Ok(SQLExpr::Identifier(vec![name, col]))
+                    }
                 } else {
                     Ok(SQLExpr::Identifier(vec![name]))
                 }
@@ -654,6 +750,11 @@ impl Parser {
             Token::Null => {
                 self.advance();
                 Ok(SQLExpr::Null)
+            }
+            Token::Variable(name) => {
+                let name = name.clone();
+                self.advance();
+                Ok(SQLExpr::Variable(name))
             }
             Token::Placeholder => {
                 self.advance();
@@ -678,14 +779,7 @@ impl Parser {
                     Ok(SQLExpr::Nested(Box::new(expr)))
                 }
             }
-            Token::Not => {
-                self.advance();
-                let expr = self.parse_primary()?;
-                Ok(SQLExpr::UnaryOp {
-                    op: UnaryOpType::Not,
-                    expr: Box::new(expr),
-                })
-            }
+            // NOT 不在这里处理 —— 见 parse_not_expr，其优先级低于比较运算符
             Token::Minus => {
                 self.advance();
                 let expr = self.parse_primary()?;
@@ -942,8 +1036,20 @@ impl Parser {
     fn parse_data_type(&mut self) -> ParseResult<String> {
         let mut dt = String::new();
         match &self.current {
-            Token::Ident(s) | Token::QuotedIdent(s) => {
+            Token::Ident(s) => {
                 dt.push_str(s);
+                self.advance();
+            }
+            Token::QuotedIdent(s) => {
+                // 引号内的类型名要带着引号回写：原样输出 "a b" 会变成两个标识符，
+                // 格式化结果无法重解析
+                if !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    dt.push_str(s);
+                } else {
+                    dt.push('`');
+                    dt.push_str(&s.replace('`', "``"));
+                    dt.push('`');
+                }
                 self.advance();
             }
             Token::Int
@@ -972,7 +1078,9 @@ impl Parser {
                 self.advance();
             }
             _ => {
-                dt.push_str(&format!("{:?}", self.current));
+                // 写 Token 的 SQL 文本（Display）而不是 Debug：Debug 不是 SQL，
+                // 格式化后无法重解析（CREATE TABLE t (id 'x') → id StringLit("x")）
+                dt.push_str(&self.current.to_string());
                 self.advance();
             }
         }
@@ -1060,42 +1168,37 @@ impl SQLParser for Parser {
 }
 
 /// 解析 SQL 文本为语句列表（最多 10,000 条语句）
+///
+/// 迭代次数耗尽时返回 Err —— 不能返回 Ok 让调用方以为已解析完：
+/// 例如 ";".repeat(10001) + "DROP TABLE users" 会先耗光迭代次数，
+/// 静默返回空列表（防火墙据此放行未解析的语句）。
 pub fn parse_sql(sql: &str) -> ParseResult<Vec<SQLStatement>> {
     const MAX_ITERATIONS: usize = 10_000;
     let mut parser = Parser::new(sql);
     let mut stmts = Vec::new();
-    for i in 0..MAX_ITERATIONS {
+    for _ in 0..MAX_ITERATIONS {
         parser.skip_comments();
-        if parser.current == Token::Eof || parser.current == Token::Semicolon {
-            if parser.current == Token::Semicolon {
-                parser.advance();
-            }
-            if parser.current == Token::Eof {
-                break;
-            }
-            if i == MAX_ITERATIONS - 1 {
-                tracing::warn!(
-                    "parse_sql reached MAX_ITERATIONS ({}), remaining input truncated",
-                    MAX_ITERATIONS
-                );
-            }
+        if parser.current == Token::Eof {
+            // 词法失败会让 token 流截断成 Eof（此时语句列表可能为空）：
+            // 必须报错，否则被丢弃的内容（如超深 /*! 里的 INTO OUTFILE）等于没检查
+            parser.check_lex_error()?;
+            return Ok(stmts);
+        }
+        if parser.current == Token::Semicolon {
+            parser.advance();
             continue;
         }
         stmts.push(parser.parse_statement()?);
         if parser.current == Token::Semicolon {
             parser.advance();
         }
-        if parser.current == Token::Eof {
-            break;
-        }
-        if i == MAX_ITERATIONS - 1 {
-            tracing::warn!(
-                "parse_sql reached MAX_ITERATIONS ({}), remaining input truncated",
-                MAX_ITERATIONS
-            );
-        }
     }
-    Ok(stmts)
+    parser.skip_comments();
+    if parser.current == Token::Eof {
+        parser.check_lex_error()?;
+        return Ok(stmts);
+    }
+    Err(format!("too many statements (> {MAX_ITERATIONS})"))
 }
 
 #[cfg(test)]
@@ -1542,6 +1645,196 @@ mod tests {
         };
         let sql = crate::format::format_statement(&SQLStatement::Select(s));
         assert!(sql.contains("?"));
+    }
+
+    #[test]
+    fn test_not_precedence_below_comparison() {
+        // NOT 必须作用于整个比较表达式，而不是只吃掉左边的 primary
+        let stmt = first("SELECT * FROM t WHERE NOT name LIKE 'a%'");
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
+        let Some(SQLExpr::UnaryOp {
+            op: UnaryOpType::Not,
+            expr,
+        }) = &s.where_clause
+        else {
+            panic!("expected NOT (...) at top level, got {:?}", s.where_clause)
+        };
+        // 正向 LIKE 由 parse_comparison 生成为 BinaryOp{Like}
+        assert!(
+            matches!(
+                expr.as_ref(),
+                SQLExpr::BinaryOp {
+                    op: BinaryOpType::Like,
+                    ..
+                }
+            ),
+            "NOT 应作用于 LIKE 整体，实际: {expr:?}"
+        );
+
+        let stmt = first("SELECT * FROM t WHERE NOT id IN (1, 2)");
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
+        let Some(SQLExpr::UnaryOp {
+            op: UnaryOpType::Not,
+            expr,
+        }) = &s.where_clause
+        else {
+            panic!("expected NOT (...) at top level")
+        };
+        assert!(matches!(expr.as_ref(), SQLExpr::InList { not: false, .. }));
+
+        let stmt = first("SELECT * FROM t WHERE NOT EXISTS (SELECT 1 FROM u)");
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
+        let Some(SQLExpr::UnaryOp {
+            op: UnaryOpType::Not,
+            expr,
+        }) = &s.where_clause
+        else {
+            panic!("expected NOT (...) at top level")
+        };
+        assert!(matches!(expr.as_ref(), SQLExpr::Exists(_, false)));
+
+        // NOT a = 1 与 NOT a BETWEEN 1 AND 2 同理
+        let stmt = first("SELECT * FROM t WHERE NOT a = 1");
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
+        let Some(SQLExpr::UnaryOp { expr, .. }) = &s.where_clause else {
+            panic!("expected NOT (...) at top level")
+        };
+        assert!(matches!(
+            expr.as_ref(),
+            SQLExpr::BinaryOp {
+                op: BinaryOpType::Eq,
+                ..
+            }
+        ));
+
+        let stmt = first("SELECT * FROM t WHERE NOT a BETWEEN 1 AND 2");
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
+        let Some(SQLExpr::UnaryOp { expr, .. }) = &s.where_clause else {
+            panic!("expected NOT (...) at top level")
+        };
+        assert!(matches!(expr.as_ref(), SQLExpr::Between { not: false, .. }));
+
+        // NOT 仍可组合在 AND/OR 内部
+        let stmt = first("SELECT * FROM t WHERE a AND NOT b OR c");
+        let SQLStatement::Select(s) = stmt else {
+            panic!("not select")
+        };
+        let Some(SQLExpr::BinaryOp {
+            op: BinaryOpType::Or,
+            ..
+        }) = &s.where_clause
+        else {
+            panic!("expected OR at top level")
+        };
+    }
+
+    #[test]
+    fn test_deep_nesting_returns_err_not_crash() {
+        // 超过深度上限返回 Err（栈溢出不可 catch，会让进程直接崩溃）
+        let deep = format!("SELECT {}1{}", "(".repeat(20_000), ")".repeat(20_000));
+        let err = parse_sql(&deep).unwrap_err();
+        assert!(err.contains("nesting too deep"), "{err}");
+        // 一元运算的递归同样受限
+        let negs = format!("SELECT {}1", "-".repeat(20_000));
+        let err = parse_sql(&negs).unwrap_err();
+        assert!(err.contains("nesting too deep"), "{err}");
+        let nots = format!("SELECT {}a", "NOT ".repeat(20_000));
+        let err = parse_sql(&nots).unwrap_err();
+        assert!(err.contains("nesting too deep"), "{err}");
+        // 合理嵌套仍能解析
+        let ok = format!("SELECT {}1{} FROM t", "(".repeat(20), ")".repeat(20));
+        assert!(parse_sql(&ok).is_ok(), "{ok}");
+    }
+
+    #[test]
+    fn test_mysql_limit_offset_comma() {
+        // MySQL 写法：LIMIT offset, count
+        let SQLStatement::Select(s) = first("SELECT * FROM t LIMIT 0, 10") else {
+            panic!("not select")
+        };
+        assert_eq!(s.offset, Some(SQLExpr::NumberLiteral("0".into())));
+        assert_eq!(s.limit, Some(SQLExpr::NumberLiteral("10".into())));
+        // 原有 LIMIT n OFFSET m 不受影响
+        let SQLStatement::Select(s) = first("SELECT * FROM t LIMIT 10 OFFSET 5") else {
+            panic!("not select")
+        };
+        assert_eq!(s.limit, Some(SQLExpr::NumberLiteral("10".into())));
+        assert_eq!(s.offset, Some(SQLExpr::NumberLiteral("5".into())));
+        // 两种写法混用不是合法 MySQL，必须报错而不是猜
+        assert!(parse_sql("SELECT * FROM t LIMIT 0, 10 OFFSET 5").is_err());
+        // 格式化后语义不变
+        let sql = crate::format::format_statement(&first("SELECT * FROM t LIMIT 0, 10"));
+        assert_eq!(sql, "SELECT * FROM t LIMIT 10 OFFSET 0");
+        assert!(parse_sql(&sql).is_ok());
+    }
+
+    #[test]
+    fn test_mysql_variables() {
+        let SQLStatement::Select(s) = first("SELECT @@version, @x, @@GLOBAL.sql_mode FROM t")
+        else {
+            panic!("not select")
+        };
+        assert_eq!(
+            s.columns[0],
+            SelectItem::Expr(SQLExpr::Variable("@@version".into()), None)
+        );
+        assert_eq!(
+            s.columns[1],
+            SelectItem::Expr(SQLExpr::Variable("@x".into()), None)
+        );
+        assert_eq!(
+            s.columns[2],
+            SelectItem::Expr(SQLExpr::Variable("@@GLOBAL.sql_mode".into()), None)
+        );
+        // WHERE 中同样可用，且格式化后按原样输出（加引号会变成同名列）
+        let stmt = first("SELECT a FROM t WHERE id = @uid");
+        assert_eq!(
+            crate::format::format_statement(&stmt),
+            "SELECT a FROM t WHERE id = @uid"
+        );
+    }
+
+    #[test]
+    fn test_explain_prefix_stripped() {
+        // EXPLAIN 前缀剥离：内层语句按其本来类型返回（防火墙据此套用该类型的策略）
+        assert!(matches!(first("EXPLAIN SELECT 1"), SQLStatement::Select(_)));
+        assert!(matches!(
+            first("EXPLAIN ANALYZE SELECT a FROM t WHERE id = 1"),
+            SQLStatement::Select(_)
+        ));
+        // EXPLAIN ANALYZE 会真正执行语句 —— 必须暴露成 Delete 才拦得住
+        assert!(matches!(
+            first("EXPLAIN DELETE FROM t"),
+            SQLStatement::Delete(_)
+        ));
+        assert!(matches!(
+            first("EXPLAIN /* c */ UPDATE t SET a = 1"),
+            SQLStatement::Update(_)
+        ));
+        // EXPLAIN 后无语句、以及尚不支持的 FORMAT 形式：返回 Err 而非 panic（外层 fail-closed）
+        assert!(parse_sql("EXPLAIN").is_err());
+        assert!(parse_sql("EXPLAIN FORMAT=TREE SELECT 1").is_err());
+    }
+
+    #[test]
+    fn test_too_many_statements_returns_err() {
+        // 迭代上限耗尽必须报错，不能静默丢掉未解析的 DROP
+        let sql = format!("{}DROP TABLE users", ";".repeat(10_001));
+        let err = parse_sql(&sql).unwrap_err();
+        assert!(err.contains("too many statements"), "{err}");
+        // 边界内仍然正常
+        let ok = format!("{}SELECT 1", ";".repeat(10));
+        assert_eq!(parse_sql(&ok).unwrap().len(), 1);
     }
 
     #[test]

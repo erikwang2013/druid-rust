@@ -1,3 +1,8 @@
+//! 连接池运行时指标（lock-free）
+//!
+//! [`PoolMetrics`] 由 `druid-pool` 在连接生命周期中维护，是 active/idle 等计数的
+//! 权威数据源；`StatFilter` 可通过 `bind_metrics` 绑定它，避免事件回调计数漂移。
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// 连接池运行时指标（lock-free）
@@ -22,19 +27,24 @@ pub struct PoolMetrics {
 }
 
 impl PoolMetrics {
+    /// 创建全零指标
     pub fn new() -> Self {
         PoolMetrics::default()
     }
 
+    /// 设置活跃连接数（池内权威计数，全量覆盖）
     pub fn set_active(&self, n: usize) {
         self.active_count.store(n as u64, Ordering::Relaxed);
     }
+    /// 设置空闲连接数（池内权威计数，全量覆盖）
     pub fn set_idle(&self, n: usize) {
         self.idle_count.store(n as u64, Ordering::Relaxed);
     }
+    /// 等待获取连接的请求数 +1
     pub fn inc_waiting(&self) {
         self.waiting_count.fetch_add(1, Ordering::Relaxed);
     }
+    /// 等待获取连接的请求数 -1（饱和，不会回绕）
     pub fn dec_waiting(&self) {
         // saturating：多余的解等待计数不会把计数回绕成 u64::MAX
         let _ = self
@@ -43,45 +53,56 @@ impl PoolMetrics {
                 Some(v.saturating_sub(1))
             });
     }
+    /// 总借用次数 +1
     pub fn inc_borrow(&self) {
         self.borrow_count.fetch_add(1, Ordering::Relaxed);
     }
+    /// 空闲池命中次数 +1
     pub fn inc_cache_hit(&self) {
         self.cache_hit_count.fetch_add(1, Ordering::Relaxed);
     }
+    /// 连接创建总数 +1
     pub fn inc_create(&self) {
         self.create_count.fetch_add(1, Ordering::Relaxed);
     }
+    /// 连接关闭总数 +1
     pub fn inc_destroy(&self) {
         self.destroy_count.fetch_add(1, Ordering::Relaxed);
     }
+    /// 累加等待时间(ns)
     pub fn add_wait_time_ns(&self, ns: u64) {
         self.total_wait_ns.fetch_add(ns, Ordering::Relaxed);
     }
 
-    // Getters
+    /// 当前活跃连接数
     pub fn active(&self) -> u64 {
         self.active_count.load(Ordering::Relaxed)
     }
+    /// 当前空闲连接数
     pub fn idle(&self) -> u64 {
         self.idle_count.load(Ordering::Relaxed)
     }
+    /// 当前等待获取连接的请求数
     pub fn waiting(&self) -> u64 {
         self.waiting_count.load(Ordering::Relaxed)
     }
+    /// 累计借用次数
     pub fn borrow_count(&self) -> u64 {
         self.borrow_count.load(Ordering::Relaxed)
     }
+    /// 累计创建连接数
     pub fn create_count(&self) -> u64 {
         self.create_count.load(Ordering::Relaxed)
     }
+    /// 累计空闲池命中次数
     pub fn cache_hit_count(&self) -> u64 {
         self.cache_hit_count.load(Ordering::Relaxed)
     }
-
+    /// 累计关闭连接数
     pub fn destroy_count(&self) -> u64 {
         self.destroy_count.load(Ordering::Relaxed)
     }
+    /// 平均等待时间(ms)；无借用记录时返回 0
     pub fn avg_wait_ms(&self) -> f64 {
         let count = self.borrow_count();
         if count == 0 {

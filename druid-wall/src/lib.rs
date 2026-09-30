@@ -1,6 +1,7 @@
 pub mod checker;
 pub mod config;
 pub mod provider;
+mod rules;
 
 use druid_core::DruidError;
 use druid_filter::{Filter, FilterContext};

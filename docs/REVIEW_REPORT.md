@@ -3,6 +3,15 @@
 **日期**: 2026-09-26 | **版本**: 1.2.0
 **测试**: 231/231 通过 | 构建: 成功 | Clippy: 0 warnings | 格式化: 通过
 
+> **后续（2026-10-01，v1.3.0）**：本报告发布后，项目又进行了一轮更深入的审查与三轮对抗验证，
+> 确认了 **11 项**在 1.2.0 "全绿"状态下未被发现的缺陷——含 3 个防火墙绕过、2 个资源泄漏、
+> 2 个并发缺陷、4 组明文口令泄漏（核心结论：SQL 防火墙与 SQL 统计在连接池路径上从未执行）。
+> 详见 [CHANGELOG.md](../CHANGELOG.md) 的 `[1.3.0]` 条目与新增的对抗测试套件
+> (`druid-pool/tests/adversarial_verify.rs`、`druid-wall/tests/adversarial.rs`、
+> `druid-sql/tests/adversarial_verify.rs`、`druid-util/tests/adversarial_verify.rs`、
+> `druid-core/tests/redact_adversarial.rs`)。
+> **本报告以下内容为 1.2.0 时期的历史快照，结论保持原样、未作改写。**
+
 > 本文件此前停留在第六轮（2026-08-02, v1.1.8）的 61 项测试状态。1.1.9 因 CI 红未同步；
 > 1.2.0 一并补齐——下列数字均为本轮实测。
 

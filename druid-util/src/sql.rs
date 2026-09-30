@@ -108,11 +108,11 @@ pub fn get_sql_type(sql: &str) -> &'static str {
         "set" => "SET",
         "begin" => "TRANSACTION",
         "start" => {
-            if trimmed.len() > 6
-                && trimmed[6..]
-                    .trim_start()
-                    .to_ascii_lowercase()
-                    .starts_with("transaction")
+            // 按 token 判断：旧的 trimmed[6..] 强切片在多字节空白（如全角空格 U+3000）处会 panic
+            if trimmed
+                .split_whitespace()
+                .nth(1)
+                .is_some_and(|w| w.trim_end_matches(';').eq_ignore_ascii_case("transaction"))
             {
                 "TRANSACTION"
             } else {
@@ -245,6 +245,17 @@ mod tests {
             assert_eq!(get_sql_type(sql), expect, "sql {sql:?}");
         }
         assert_eq!(get_sql_type(" start transaction"), "TRANSACTION"); // 前后空白容忍
+    }
+
+    #[test]
+    fn test_get_sql_type_start_transaction_no_panic() {
+        // 全角空格（中文环境复制粘贴常见）：旧实现 trimmed[6..] 的字节 6 落在 U+3000 内部会 panic
+        assert_eq!(get_sql_type("START\u{3000}TRANSACTION"), "TRANSACTION");
+        assert_eq!(get_sql_type("START\u{3000}"), "OTHER"); // 只有第一个 token
+        assert_eq!(get_sql_type("START中"), "OTHER"); // 多字节紧邻
+        assert_eq!(get_sql_type("start transaction;"), "TRANSACTION"); // 尾随分号
+        assert_eq!(get_sql_type("start transactionx"), "OTHER"); // 词必须完整匹配
+        assert_eq!(get_sql_type("start"), "OTHER");
     }
 
     #[test]

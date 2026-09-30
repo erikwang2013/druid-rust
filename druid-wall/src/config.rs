@@ -21,6 +21,24 @@ pub struct WallConfig {
     pub update_delete_require_where: bool,
     #[serde(default)]
     pub select_into_outfile_allow: bool,
+    /// 解析失败的 SQL 是否拒绝（fail-closed，默认 true）。
+    ///
+    /// 已知代价：druid-sql 尚未建模的合法语法（`SHOW`、`UNION`、
+    /// `INSERT ... ON DUPLICATE KEY UPDATE`、`SELECT ... FOR UPDATE`、
+    /// `CREATE TABLE ... ENGINE|CHECK` 等）也会落入这里被拒。需要放行时置 false
+    /// —— 此时仍保留：按首关键字归类命中 `deny_operations`、INTO OUTFILE/DUMPFILE、
+    /// 多语句检查；语句类型完全无法识别且 `deny_operations` 非空时依旧拒绝。
+    ///
+    /// 另有两条**刻意拒绝**（非 parser 缺口，置 false 也不会放行，只要
+    /// `deny_operations` 非空）：`USE`（`USE mysql` 后 `SELECT * FROM user` 可绕过
+    /// `deny_schemas`）与 `SET`（`SET sql_mode='NO_BACKSLASH_ESCAPES'` 会改变**后续
+    /// 语句**的字符串解析语义，正是转义引号致盲类绕过的根因面）。无状态文本墙无法
+    /// 安全放行，需先做专项风险决策才能开（决策见 wall_rules.rs 事务/USE/SET 用例）。
+    ///
+    /// 事务控制语句（BEGIN/COMMIT/ROLLBACK/START TRANSACTION/SAVEPOINT/RELEASE
+    /// SAVEPOINT）不受该开关影响，精确形状匹配后始终放行。
+    #[serde(default = "default_true")]
+    pub deny_unparsable: bool,
 }
 fn default_name() -> String {
     "wall".into()
@@ -48,6 +66,7 @@ impl Default for WallConfig {
             deny_keywords: vec![],
             update_delete_require_where: true,
             select_into_outfile_allow: false,
+            deny_unparsable: true,
         }
     }
 }
@@ -119,6 +138,7 @@ mod tests {
         );
         assert!(c.deny_schemas.is_empty());
         assert!(c.deny_keywords.is_empty());
+        assert!(c.deny_unparsable);
     }
 
     #[test]

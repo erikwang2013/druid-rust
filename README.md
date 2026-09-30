@@ -1,7 +1,7 @@
 # Druid Rust
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-231%20passed-green)]()
+[![Tests](https://img.shields.io/badge/tests-415%20passed-green)]()
 
 <p align="center">
   <img src="docs/assets/mascot.svg" width="140" alt="Druid-Rust 项目宠物 · 德鲁伊猫头鹰「小德」">
@@ -58,7 +58,7 @@
 
 **2. 组合优于继承 (Composition over Inheritance)**
 - Java Druid 的类继承体系改为 Rust `trait` + `struct` 组合
-- `Filter` trait 提供 20+ 生命周期钩子，默认空实现
+- `Filter` trait 提供 18 个生命周期钩子，默认空实现
 - `dyn Filter` trait 对象构建可插拔责任链
 
 **3. 类型安全 (Type-Safe)**
@@ -79,11 +79,13 @@
   ▼
 DruidDataSource.get_connection()     ← Semaphore 许可控制
   │
-  ├─► FilterChain.connection_borrowed()   ← WallFilter/StatFilter 回调
+  ├─► FilterChain.connection_borrowed()   ← WallFilter/StatFilter 回调（连接事件，SQL 检查见「使用教程」）
   │
   ▼
 PoolGuard (使用连接)                  ← 池化连接
   │
+  ├─► PoolGuard::execute()/query()     ← 唯一会让 SQL 流经 FilterChain 的入口
+  │                                      （guard.connection() 绕过它，见「使用教程」）
   ▼
 PoolGuard::drop()                     ← RAII 自动归还
   │
@@ -108,12 +110,13 @@ PoolGuard::drop()                     ← RAII 自动归还
 | **创建** Creating | `init()` 预热 / 池空时按需创建 | 调用 `Driver::connect()` |
 | **空闲** Idle | 连接成功 / 归还 | 进入空闲队列 `VecDeque` |
 | **活跃** Active | `get_connection()` 借出 | 由 `PoolGuard` 持有，RAII 保证归还 |
-| **验证** Validating | `test_on_borrow` / `test_on_return` / KeepAlive | 可选检查点，失败即销毁 |
+| **验证** Validating | `test_on_borrow` / `test_on_return` / KeepAlive | 可选检查点，失败即销毁；校验期间连接**计入 active**（归还校验与 KeepAlive 均是，对指标和 `close()` 都可见） |
 | **销毁** Destroyed | `close()` / 验证失败 / 空闲超时驱逐 | 调用 `Connection::close()` |
 
 - **归还**：`PoolGuard` 在 `drop` 时自动归还，业务代码无需显式释放，panic 也不会泄漏连接。
-- **驱逐**：空闲超过 `min_evictable_idle_time_ms` 的连接被后台 Evictor 回收。
-- **KeepAlive**：`keep_alive` 开启后，后台任务定时 `ping` 空闲连接，避免被数据库端或中间件断开。
+- **驱逐**：空闲超过 `max_evictable_idle_time_ms`（且空闲数高于 `min_idle`）的连接被后台 Evictor 回收。
+- **KeepAlive**：`keep_alive` 开启后，后台任务定时 `ping` 空闲连接，避免被数据库端或中间件断开；
+  校验期间连接从空闲队列摘出、计入 active 并占用一个并发许可（与借用路径同一套状态语义）。
 
 ## 项目结构
 
@@ -142,12 +145,12 @@ druid-rust/
 │   └── src/{sql.rs, string.rs, crypto.rs, time.rs}
 │        • SQL 类型检测、JDBC URL 推断
 │        • 驼峰/下划线转换、参数替换
-│        • 密码加解密、时间格式化
+│        • 密码加解密（独立工具，未接入连接池配置）、时间格式化
 │
 ├── druid-sql/                         # ── 层 1: SQL 解析 ──
 │   └── src/
 │        ├── token.rs                  # 80+ Token 定义 + 关键字映射
-│        ├── ast/expr.rs               # 30 种表达式 + 6 种语句 AST
+│        ├── ast/expr.rs               # 22 种表达式 + 6 种语句 AST
 │        ├── parser/lexer.rs           # 词法分析器
 │        ├── parser/mod.rs             # 递归下降 Parser
 │        ├── parser/dialects/mysql.rs  # 方言扩展
@@ -156,16 +159,16 @@ druid-rust/
 │
 ├── druid-filter/                      # ── 层 2: Filter 架构 ──
 │   └── src/{lib.rs, adapter.rs, chain.rs, manager.rs}
-│        • Filter trait (20+ 生命周期钩子)
+│        • Filter trait (18 个生命周期钩子)
 │        • FilterAdapter 默认空实现
 │        • FilterChain 责任链
 │        • FilterManager
 │
 ├── druid-wall/                        # ── 层 3: 防火墙 ──
 │   └── src/{config.rs, checker.rs, provider.rs, lib.rs}
-│        • WallConfig 13 项安全配置
+│        • WallConfig 11 项安全配置
 │        • WallChecker AST 级安全检查
-│        • WallProvider LRU 检查缓存
+│        • WallProvider 检查结果缓存（容量 512）
 │        • WallFilter (实现 Filter trait)
 │
 ├── druid-stat/                        # ── 层 3: 监控 ──
@@ -182,7 +185,7 @@ druid-rust/
 │   │    • Semaphore 并发控制
 │   │    • 驱逐/KeepAlive 后台任务
 │   │    • PoolGuard RAII 自动归还
-│   │    • PSCache LRU 缓存
+│   │    • PSCache 缓存容器（未接入借用路径）
 │   ├── benches/pool_bench.rs          # 性能基准
 │   └── examples/basic.rs              # 使用示例
 │
@@ -209,13 +212,20 @@ druid-rust/
 ### Crate 依赖关系
 
 ```
-druid-console ──────► druid-stat ──────► druid-filter ──────► druid-core
-druid-ha ───────────► druid-pool ──────► druid-filter         druid-util
-druid-proxy ────────► druid-pool        druid-stat
-                      druid-wall ──────► druid-util
-                                         druid-sql
-                                         druid-filter
+druid-util    ──────► druid-core
+druid-sql     ──────► druid-core
+druid-filter  ──────► druid-core
+druid-wall    ──────► druid-core   druid-sql   druid-filter
+druid-stat    ──────► druid-core   druid-filter   druid-util
+druid-pool    ──────► druid-core   druid-filter   druid-stat
+druid-proxy   ──────► druid-core   druid-filter
+druid-ha      ──────► druid-core   druid-pool
+druid-console ──────► druid-core   druid-stat
 ```
+
+> 另有两处仅测试用的 `[dev-dependencies]`，不在上面的正常依赖图中：
+> `druid-wall → druid-pool`（端到端对抗测试走真实的「数据源 → Filter 链 → 驱动」路径）、
+> `druid-console → druid-filter`（测试构造 Filter）。
 
 ## 核心功能
 
@@ -234,8 +244,8 @@ druid-proxy ────────► druid-pool        druid-stat
 | 空闲驱逐 | 后台 `tokio::spawn` 定时清理超时空闲连接 |
 | KeepAlive | 后台定时验证连接有效性（锁提前释放） |
 | 借还验证 | `test_on_borrow` / `test_on_return` 可选开启 |
-| PSCache | SQL → PreparedStatement LRU 缓存 |
-| Filter 集成 | 完整的 FilterChain 生命周期钩子 |
+| PSCache | 提供 PreparedStatement 缓存容器（当前未接入借用路径） |
+| Filter 集成 | 构造期注入 Filter（`with_filters`），18 个生命周期钩子经 `guard.execute()/query()` 触发 |
 
 ### 2. SQL 解析器 (druid-sql)
 
@@ -259,7 +269,7 @@ druid-proxy ────────► druid-pool        druid-stat
 | 多语句 | 分号分隔的多语句拦截 |
 | 关键字 | 自定义禁止关键字列表 |
 | SQL 长度 | 最大长度限制 |
-| 缓存 | LRU 512 条检查结果缓存，命中率统计 |
+| 缓存 | 512 条检查结果缓存（满时批量淘汰），命中率统计 |
 
 ### 4. 监控统计 (druid-stat)
 
@@ -272,8 +282,8 @@ druid-proxy ────────► druid-pool        druid-stat
 ### 5. 高可用 (druid-ha)
 
 - 加权轮询多数据源负载均衡
-- 异步健康检查（手动触发或独立线程循环）
-- 自动故障切换（Down → Testing → Active）
+- 异步健康检查（手动触发或后台循环）
+- 自动故障切换（Active ↔ Down，连续失败/成功次数达阈值才切换）
 
 ## 快速开始
 
@@ -321,24 +331,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 集成 SQL 防火墙
 
+Filter 在**构造期**注入——链在包装为 `Arc` 前完成配置，运行期只读，不存在注册竞态：
+
 ```rust
+use druid_pool::DruidDataSource;
 use druid_wall::{WallConfig, WallFilter};
 
-let wall = WallFilter::new(WallConfig {
-    update_delete_require_where: true,
-    deny_functions: vec!["SLEEP".into(), "BENCHMARK".into()],
-    ..Default::default()
-});
-// wall 实现 Filter trait，可插入 FilterChain
+let ds = DruidDataSource::with_filters(
+    your_mysql_driver,
+    config,
+    vec![Box::new(WallFilter::new(WallConfig {
+        update_delete_require_where: true,
+        deny_functions: vec!["SLEEP".into(), "BENCHMARK".into()],
+        ..Default::default()
+    }))],
+);
+ds.init().await?;
+
+// ⚠️ SQL 必须走 guard.execute()/query()，Filter 才会被调用
+let affected = guard.execute("DELETE FROM t WHERE id = 1").await?;
 ```
+
+> `guard.connection().execute()` 是**绕过 Filter 的逃生通道**（运维脚本等场景）。走它的话
+> 防火墙与统计都不会生效——这是设计取舍，不是 bug。
+>
+> 防火墙默认 **fail-closed**：解析失败或语句类型无法识别的 SQL 一律拒绝
+> （`WallConfig::deny_unparsable`，默认 `true`）。若你的业务用到 parser 尚未支持的
+> 语法（如 `UNION`、`EXPLAIN FORMAT=TREE`），会表现为"合法 SQL 被拒"；确认风险后
+> 可显式关掉该开关。
 
 ### 添加 SQL 监控
 
 ```rust
+use druid_pool::DruidDataSource;
 use druid_stat::StatFilter;
 use std::sync::Arc;
 
 let stat = Arc::new(StatFilter::new("mydb", 1000)); // 1000ms 慢 SQL 阈值
+
+// Arc<T: Filter> 本身即 Filter：传 clone 进链，同时保留句柄供链外读取
+let ds = DruidDataSource::with_filters(
+    your_mysql_driver,
+    config,
+    vec![Box::new(stat.clone())],
+);
+ds.init().await?;
+
+// 推荐：绑定池内权威指标，控制台的 active/idle 直接读池计数，不再由 StatFilter 自行累加
+stat.bind_metrics(ds.metrics_arc());
 
 // 获取统计
 let sql_stats = stat.get_sql_stats();      // 按耗时排序的 SQL 列表
@@ -346,6 +386,9 @@ let slow_sql = stat.get_slow_sql();         // 超过阈值的慢 SQL
 let ds_stat = stat.get_datasource_stat();   // 连接池概览
 println!("执行次数: {}, 慢SQL: {}", ds_stat.execute_count, slow_sql.len());
 ```
+
+SQL 统计表有容量上限（默认 1000 条，按总耗时淘汰最冷条目），
+可用 `StatFilter::with_max_sql_size(n)` 调整，避免动态 SQL 场景内存无界增长。
 
 ### 启动 Web 监控控制台
 
@@ -355,9 +398,17 @@ use std::sync::Arc;
 
 let stat = Arc::new(StatFilter::new("app-db", 500));
 tokio::spawn(async {
-    druid_console::start_server(stat, "127.0.0.1:9090").await.unwrap();
+    // 控制台会暴露 SQL 原文（含字面量）。生产环境必须设置 token，或只绑回环地址。
+    druid_console::start_server_with_token(
+        stat,
+        "127.0.0.1:9090",
+        Some("my-secret".into()),
+    )
+    .await
+    .unwrap();
 });
 // 浏览器访问 http://127.0.0.1:9090/druid/index.html
+// 请求需带 Authorization: Bearer my-secret
 ```
 
 ### 高可用多数据源
@@ -375,7 +426,9 @@ ha.set_check_interval(Duration::from_secs(30));
 let ds = ha.get_datasource().await?;      // 加权轮询
 ha.mark_down("master");                   // master 故障，切到 slave
 ha.mark_up("master");                     // 恢复
-ha.spawn_health_check_loop();             // 启动健康检查循环
+
+let ha = std::sync::Arc::new(ha);         // spawn_health_check_loop 需要 Arc<Self>
+let _handle = ha.spawn_health_check_loop(); // 启动健康检查循环（返回 JoinHandle，shutdown() 停止）
 ```
 
 ### 自定义 Filter
@@ -420,18 +473,24 @@ impl Filter for MyLogFilter {
 | `time_between_eviction_runs_ms` | u64 | 60000 | 驱逐检查间隔 |
 | `min_evictable_idle_time_ms` | u64 | 1800000 | 连接最小空闲存活时间(30min) |
 | `max_evictable_idle_time_ms` | u64 | 25200000 | 连接最大空闲存活时间(7h) |
+| `max_lifetime_ms` | u64 | 0 | 连接绝对最大生命周期(0=不限制)，按**物理连接创建时刻**判定（非最近使用时刻） |
 | `test_on_borrow` | bool | true | 获取时验证 |
 | `test_on_return` | bool | false | 归还时验证 |
 | `test_while_idle` | bool | false | 空闲时验证 |
 | `validation_query` | Option\<String\> | None | 验证 SQL |
-| `pool_prepared_statements` | bool | false | 启用 PSCache |
-| `max_pool_prepared_statement` | usize | 10 | PSCache 大小 |
+| `validation_query_timeout_secs` | u64 | 0 | 验证查询超时(秒，0=不超时) |
+| `pool_prepared_statements` | bool | false | 仅创建 PSCache 容器（未接入借用路径） |
+| `max_pool_prepared_statement_per_connection_size` | usize | 10 | PSCache 大小 |
 | `keep_alive` | bool | false | 启用 KeepAlive |
 | `keep_alive_between_time_ms` | u64 | 120000 | KeepAlive 间隔 |
-| `filters` | Vec\<String\> | [] | Filter 列表 |
+| `filters` | Vec\<String\> | [] | **未接线**：非空时 `init()` 直接报错，请改用 `DruidDataSource::with_filters(...)` |
 | `connection_properties` | Vec\<String\> | [] | 连接属性 |
 | `connect_timeout_secs` | u64 | 30 | 连接超时 |
 | `socket_timeout_secs` | u64 | 30 | Socket 超时 |
+
+> ⚠️ 以下参数**当前未接线**，设置后 `init()` 只打印一条汇总告警、不改变行为：
+> `min_evictable_idle_time_ms`、`test_while_idle`、`validation_query`、
+> `connection_properties`、`socket_timeout_secs`、`driver_class_name`。
 
 ### WallConfig 安全参数
 
@@ -441,13 +500,12 @@ impl Filter for MyLogFilter {
 | `deny_operations` | Vec\<DenyOperation\> | [Truncate,DropTable,AlterTable] | 禁止操作 |
 | `deny_functions` | Vec\<String\> | [SLEEP,BENCHMARK,LOAD_FILE] | 禁止函数 |
 | `deny_keywords` | Vec\<String\> | [] | 禁止关键字 |
-| `deny_tables` | Vec\<String\> | [] | 禁止表 |
 | `deny_schemas` | Vec\<String\> | [] | 禁止 Schema |
 | `max_sql_length` | usize | 8192 | 最大 SQL 长度 |
 | `allow_multi_statements` | bool | false | 允许多语句 |
 | `update_delete_require_where` | bool | true | UPDATE/DELETE 强制 WHERE |
 | `select_into_outfile_allow` | bool | false | 允许 SELECT INTO OUTFILE |
-| `table_whitelist_mode` | bool | false | 表白名单模式 |
+| `deny_unparsable` | bool | true | 解析失败/类型无法识别的 SQL 一律拒绝（fail-closed） |
 
 ## 从 Java Druid 迁移
 
@@ -461,7 +519,7 @@ impl Filter for MyLogFilter {
 | `synchronized` | `Mutex<T>` / `RwLock<T>` | 数据放入锁内 |
 | `Optional<T>` | `Option<T>` | 穷尽模式匹配 |
 | Spring Boot DI | 构造函数注入 | 无 DI 容器 |
-| JPA/Hibernate | sqlx (async-native) | 显式 SQL |
+| JPA/Hibernate | 无 ORM（本项目自定义 `Driver`/`Connection` trait） | 显式 SQL |
 | `volatile` | `AtomicBool` / `Ordering` | 显式内存排序 |
 | Annotation | `#[derive(...)]` | 编译期代码生成 |
 | ServiceLoader SPI | `linkme` / 手动注册 | 链接期发现 |
@@ -471,7 +529,8 @@ impl Filter for MyLogFilter {
 
 关键差异：
 - **不需要 DI 容器**：Rust 中构造函数注入即够用，无需 Spring
-- **不需要 ORM**：sqlx 编译期检查 SQL，无需 Hibernate 的运行时延迟加载
+- **不需要 ORM**：本项目不用 sqlx 也不做编译期 SQL 检查——`Driver`/`Connection` 是自定义的异步 trait，
+  SQL 以 `&str` 直接下传，无需 Hibernate 那样的运行时延迟加载（生态里 sqlx 是另一种选择，本项目未采用）
 - **没有 JDBC 标准**：自定义 `Driver`/`Connection` async trait 替代 JDBC 接口
 - **MutexGuard 不能跨 `.await`**：后台任务需提前 clone 所需数据
 
@@ -483,7 +542,7 @@ impl Filter for MyLogFilter {
 
 ```toml
 [workspace.package]
-version = "1.2.0"
+version = "1.3.0"
 ```
 
 所有 10 个子 crate 通过 `version.workspace = true` 继承，修改版本号只需改一处。
@@ -502,7 +561,7 @@ cargo build --release    # LTO + codegen-units=1
 cargo check --workspace          # 快速检查编译
 cargo clippy --all-targets       # Lint 检查（当前: 0 warnings）
 cargo fmt --all                  # 格式化
-cargo test --workspace           # 231 passed; 0 failed
+cargo test --workspace           # 415 passed; 0 failed
 ```
 
 ### 运行基准
@@ -521,17 +580,17 @@ cargo run --example basic
 
 | Crate | 测试数 |
 |-------|--------|
-| druid-core | 23 |
-| druid-util | 35 |
-| druid-sql | 53 |
-| druid-wall | 34 |
-| druid-pool | 23 |
-| druid-filter | 18 |
-| druid-console | 16 |
-| druid-stat | 14 |
-| druid-ha | 8 |
-| druid-proxy | 7 |
-| **总计** | **231** |
+| druid-core | 45 |
+| druid-util | 57 |
+| druid-sql | 86 |
+| druid-wall | 59 |
+| druid-pool | 83 |
+| druid-filter | 20 |
+| druid-console | 22 |
+| druid-stat | 22 |
+| druid-ha | 12 |
+| druid-proxy | 9 |
+| **总计** | **415** |
 
 ## 审查报告
 
@@ -539,7 +598,7 @@ cargo run --example basic
 
 - `cargo check`: ✅ 零警告
 - `cargo clippy --all-targets`: ✅ 零警告
-- `cargo test`: ✅ 231/231 通过
+- `cargo test`: ✅ 415/415 通过
 - `cargo fmt --check`: ✅ 格式一致
 
 ## License

@@ -1,7 +1,10 @@
 use thiserror::Error;
 
 /// Druid 统一错误类型
+///
+/// `#[non_exhaustive]`：次版本可能新增变体，下游不要穷尽匹配（与 `DbType` 保持一致）。
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum DruidError {
     /// 连接池相关错误
     #[error("pool error: {0}")]

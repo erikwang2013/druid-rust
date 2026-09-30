@@ -117,6 +117,76 @@ pub trait Filter: Send + Sync {
     fn data_source_inited(&self, _ctx: &FilterContext) {}
 }
 
+/// `Arc<T>` 也是 Filter —— 便于在链外保留句柄
+///
+/// FilterChain 建成后不可变更，但业务侧通常仍需访问同一个 Filter 实例
+/// （读 SQL 统计、防火墙命中率、挂到 Web 控制台），例如 `Arc<StatFilter>`。
+/// 说明：`Arc` 无法取得 `&mut`，`init`/`destroy` 仅在唯一持有时转发。
+impl<T: Filter + ?Sized> Filter for std::sync::Arc<T> {
+    fn init(&mut self) -> Result<(), DruidError> {
+        match std::sync::Arc::get_mut(self) {
+            Some(f) => f.init(),
+            None => Ok(()), // 已共享：初始化由创建方负责
+        }
+    }
+
+    fn destroy(&mut self) {
+        if let Some(f) = std::sync::Arc::get_mut(self) {
+            f.destroy();
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        (**self).name()
+    }
+
+    fn connection_created(&self, ctx: &FilterContext) {
+        (**self).connection_created(ctx)
+    }
+    fn connection_borrow_before(&self, ctx: &FilterContext) {
+        (**self).connection_borrow_before(ctx)
+    }
+    fn connection_borrowed(&self, ctx: &FilterContext, wait_ms: u64) {
+        (**self).connection_borrowed(ctx, wait_ms)
+    }
+    fn connection_return_before(&self, ctx: &FilterContext) {
+        (**self).connection_return_before(ctx)
+    }
+    fn connection_returned(&self, ctx: &FilterContext) {
+        (**self).connection_returned(ctx)
+    }
+    fn connection_closed(&self, ctx: &FilterContext) {
+        (**self).connection_closed(ctx)
+    }
+    fn connection_error(&self, ctx: &FilterContext, error: &DruidError) {
+        (**self).connection_error(ctx, error)
+    }
+    fn statement_created(&self, ctx: &FilterContext) {
+        (**self).statement_created(ctx)
+    }
+    fn statement_execute_before(&self, ctx: &FilterContext) -> Result<(), DruidError> {
+        (**self).statement_execute_before(ctx)
+    }
+    fn statement_execute_after(&self, ctx: &FilterContext, elapsed_ms: u64, rows: u64) {
+        (**self).statement_execute_after(ctx, elapsed_ms, rows)
+    }
+    fn statement_closed(&self, ctx: &FilterContext) {
+        (**self).statement_closed(ctx)
+    }
+    fn statement_error(&self, ctx: &FilterContext, error: &DruidError) {
+        (**self).statement_error(ctx, error)
+    }
+    fn resultset_open(&self, ctx: &FilterContext) {
+        (**self).resultset_open(ctx)
+    }
+    fn resultset_closed(&self, ctx: &FilterContext, rows_read: u64) {
+        (**self).resultset_closed(ctx, rows_read)
+    }
+    fn data_source_inited(&self, ctx: &FilterContext) {
+        (**self).data_source_inited(ctx)
+    }
+}
+
 /// 可克隆的 Filter 包装
 impl std::fmt::Debug for dyn Filter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -183,5 +253,30 @@ mod tests {
     fn test_dyn_filter_debug() {
         let f: Box<dyn Filter> = Box::new(MinimalFilter);
         assert!(format!("{:?}", f).contains("MinimalFilter"));
+    }
+
+    /// Arc 包装的 Filter 可直接挂链，且链外句柄仍能读到同一实例的状态
+    #[test]
+    fn test_arc_filter_delegates_and_keeps_handle() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        use std::sync::Arc;
+
+        struct Counter(AtomicU64);
+        impl Filter for Counter {
+            fn statement_execute_after(&self, _ctx: &FilterContext, _ms: u64, _rows: u64) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let handle = Arc::new(Counter(AtomicU64::new(0)));
+        let mut chain = crate::FilterChain::new("ds");
+        chain.add_filter(Box::new(handle.clone()));
+
+        chain.statement_execute_after("SELECT 1", 1, 1, 1);
+        assert_eq!(handle.0.load(Ordering::SeqCst), 1, "链外句柄可读到同一实例");
+        assert!(chain.filter_names()[0].contains("Counter"));
+        // Arc 共享时 init 不转发但仍返回 Ok（初始化由创建方负责）
+        let mut boxed: Box<dyn Filter> = Box::new(handle.clone());
+        assert!(boxed.init().is_ok());
     }
 }

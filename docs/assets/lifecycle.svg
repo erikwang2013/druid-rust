@@ -71,7 +71,7 @@
   <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#7c93a8">
     <text x="48" y="434">· PoolGuard::drop() 触发自动归还</text>
     <text x="48" y="456">· test_on_borrow / test_on_return 验证</text>
-    <text x="48" y="478">· test_while_idle 空闲验证</text>
-    <text x="48" y="497">· min_evictable_idle_time_ms 驱逐阈值</text>
+    <text x="48" y="478">· 校验期间连接计入 active（占并发许可）</text>
+    <text x="48" y="497">· max_evictable_idle_time_ms 驱逐阈值</text>
   </g>
 </svg>

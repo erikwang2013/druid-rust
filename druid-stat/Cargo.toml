@@ -12,6 +12,7 @@ categories = ["development-tools"]
 [dependencies]
 druid-core.workspace = true
 druid-filter.workspace = true
+druid-util.workspace = true
 tracing.workspace = true
 serde.workspace = true
 chrono.workspace = true

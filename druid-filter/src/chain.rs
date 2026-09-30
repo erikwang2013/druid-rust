@@ -59,10 +59,24 @@ impl FilterChain {
         }
     }
 
+    pub fn connection_borrow_before(&self, conn_id: u64) {
+        let ctx = self.ctx().with_connection(conn_id);
+        for f in &self.filters {
+            f.connection_borrow_before(&ctx);
+        }
+    }
+
     pub fn connection_borrowed(&self, conn_id: u64, wait_ms: u64) {
         let ctx = self.ctx().with_connection(conn_id);
         for f in &self.filters {
             f.connection_borrowed(&ctx, wait_ms);
+        }
+    }
+
+    pub fn connection_return_before(&self, conn_id: u64) {
+        let ctx = self.ctx().with_connection(conn_id);
+        for f in &self.filters {
+            f.connection_return_before(&ctx);
         }
     }
 
@@ -88,6 +102,13 @@ impl FilterChain {
     }
 
     // Statement 生命周期
+    pub fn statement_created(&self, sql: &str, stmt_id: u64) {
+        let ctx = self.ctx().with_sql(sql).with_statement(stmt_id);
+        for f in &self.filters {
+            f.statement_created(&ctx);
+        }
+    }
+
     pub fn statement_execute_before(&self, sql: &str, stmt_id: u64) -> Result<(), DruidError> {
         let ctx = self.ctx().with_sql(sql).with_statement(stmt_id);
         for f in &self.filters {
@@ -100,6 +121,20 @@ impl FilterChain {
         let ctx = self.ctx().with_sql(sql).with_statement(stmt_id);
         for f in &self.filters {
             f.statement_execute_after(&ctx, elapsed_ms, rows);
+        }
+    }
+
+    pub fn statement_closed(&self, sql: &str, stmt_id: u64) {
+        let ctx = self.ctx().with_sql(sql).with_statement(stmt_id);
+        for f in &self.filters {
+            f.statement_closed(&ctx);
+        }
+    }
+
+    pub fn statement_error(&self, sql: &str, stmt_id: u64, error: &DruidError) {
+        let ctx = self.ctx().with_sql(sql).with_statement(stmt_id);
+        for f in &self.filters {
+            f.statement_error(&ctx, error);
         }
     }
 
@@ -202,6 +237,14 @@ mod tests {
                 wait_ms
             ));
         }
+        fn statement_created(&self, ctx: &FilterContext) {
+            self.log.lock().unwrap().push(format!(
+                "{}.created({},{})",
+                self.name,
+                ctx.statement_id.unwrap(),
+                ctx.sql.as_deref().unwrap()
+            ));
+        }
         fn statement_execute_before(&self, ctx: &FilterContext) -> Result<(), DruidError> {
             self.log.lock().unwrap().push(format!(
                 "{}.execute_before({})",
@@ -209,6 +252,35 @@ mod tests {
                 ctx.sql.as_deref().unwrap()
             ));
             Ok(())
+        }
+        fn statement_closed(&self, ctx: &FilterContext) {
+            self.log.lock().unwrap().push(format!(
+                "{}.closed({})",
+                self.name,
+                ctx.statement_id.unwrap()
+            ));
+        }
+        fn statement_error(&self, ctx: &FilterContext, error: &DruidError) {
+            self.log.lock().unwrap().push(format!(
+                "{}.stmt_error({},{})",
+                self.name,
+                ctx.statement_id.unwrap(),
+                error
+            ));
+        }
+        fn connection_borrow_before(&self, ctx: &FilterContext) {
+            self.log.lock().unwrap().push(format!(
+                "{}.borrow_before({})",
+                self.name,
+                ctx.connection_id.unwrap()
+            ));
+        }
+        fn connection_return_before(&self, ctx: &FilterContext) {
+            self.log.lock().unwrap().push(format!(
+                "{}.return_before({})",
+                self.name,
+                ctx.connection_id.unwrap()
+            ));
         }
         fn connection_error(&self, ctx: &FilterContext, error: &DruidError) {
             self.log.lock().unwrap().push(format!(
@@ -275,6 +347,37 @@ mod tests {
         let err = chain.statement_execute_before("SELECT 1", 1);
         assert!(matches!(err, Err(DruidError::Wall(_))));
         assert!(log.lock().unwrap().is_empty(), "后续 filter 不应被调用");
+    }
+
+    /// 补齐的 statement/connection 钩子必须真正 dispatch，且顺序为 created → before → error/after → closed
+    #[test]
+    fn test_chain_dispatches_statement_and_borrow_hooks() {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let mut chain = FilterChain::new("ds");
+        chain.add_filter(Box::new(LoggingFilter {
+            name: "f",
+            log: log.clone(),
+        }));
+
+        chain.connection_borrow_before(3);
+        chain.statement_created("SELECT 1", 7);
+        chain.statement_execute_before("SELECT 1", 7).unwrap();
+        chain.statement_error("SELECT 1", 7, &DruidError::Database("boom".into()));
+        chain.statement_execute_after("SELECT 1", 7, 2, 5); // 未覆写：不产生日志
+        chain.statement_closed("SELECT 1", 7);
+        chain.connection_return_before(3);
+
+        assert_eq!(
+            *log.lock().unwrap(),
+            vec![
+                "f.borrow_before(3)",
+                "f.created(7,SELECT 1)",
+                "f.execute_before(SELECT 1)",
+                "f.stmt_error(7,database error: boom)",
+                "f.closed(7)",
+                "f.return_before(3)",
+            ]
+        );
     }
 
     /// 上下文构造：with_sql/with_connection 参数传递到所有 Filter

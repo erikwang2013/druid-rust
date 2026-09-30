@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.2.0"
+version = "1.3.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/erikwang2013/druid-rust"
@@ -24,16 +24,16 @@ authors = ["erik"]
 
 [workspace.dependencies]
 # 内部 crate —— path 供本地开发，version 供 crates.io 发布
-druid-core = { version = "1.2.0", path = "druid-core" }
-druid-util = { version = "1.2.0", path = "druid-util" }
-druid-sql = { version = "1.2.0", path = "druid-sql" }
-druid-filter = { version = "1.2.0", path = "druid-filter" }
-druid-wall = { version = "1.2.0", path = "druid-wall" }
-druid-pool = { version = "1.2.0", path = "druid-pool" }
-druid-stat = { version = "1.2.0", path = "druid-stat" }
-druid-proxy = { version = "1.2.0", path = "druid-proxy" }
-druid-ha = { version = "1.2.0", path = "druid-ha" }
-druid-console = { version = "1.2.0", path = "druid-console" }
+druid-core = { version = "1.3.0", path = "druid-core" }
+druid-util = { version = "1.3.0", path = "druid-util" }
+druid-sql = { version = "1.3.0", path = "druid-sql" }
+druid-filter = { version = "1.3.0", path = "druid-filter" }
+druid-wall = { version = "1.3.0", path = "druid-wall" }
+druid-pool = { version = "1.3.0", path = "druid-pool" }
+druid-stat = { version = "1.3.0", path = "druid-stat" }
+druid-proxy = { version = "1.3.0", path = "druid-proxy" }
+druid-ha = { version = "1.3.0", path = "druid-ha" }
+druid-console = { version = "1.3.0", path = "druid-console" }
 
 # 异步运行时
 tokio = { version = "1", features = ["full"] }
@@ -61,7 +61,10 @@ criterion = "0.5"
 
 # 工具
 chrono = { version = "0.4", features = ["serde"] }
-aes-gcm = "0.10"
+# zeroize feature：aes-gcm 侧清 GHASH 构造期的临时密钥，aes 侧给轮密钥加 ZeroizeOnDrop，
+# 两者缺一 feature 都会被 #[cfg] 编译掉
+aes-gcm = { version = "0.10", features = ["zeroize"] }
+aes = { version = "0.8", features = ["zeroize"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [profile.release]

@@ -4,23 +4,30 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use druid_core::{DruidConfig, DruidError};
-use druid_filter::FilterChain;
+use druid_filter::manager::FilterManager;
+use druid_filter::{Filter, FilterChain};
 use druid_stat::metrics::PoolMetrics;
-use tokio::sync::Semaphore;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
+use crate::background::{self, spawn_close, validate_with_timeout};
 use crate::driver::{Connection, Driver};
+use crate::guard::PoolGuard;
 use crate::pscache::PSCache;
 
-struct PoolEntry<C: Connection> {
-    conn: Arc<C>,
-    last_used_at: Instant,
-    id: u64,
+/// 空闲池中的一条物理连接
+pub(crate) struct PoolEntry<C: Connection> {
+    pub(crate) conn: Arc<C>,
+    /// 最近归还/创建时刻，仅用于空闲驱逐
+    pub(crate) last_used_at: Instant,
+    /// 物理连接创建时刻，用于 max_lifetime 判定（归还时不刷新）
+    pub(crate) created_at: Instant,
+    pub(crate) id: u64,
 }
 
-struct PoolInner<C: Connection> {
-    idle: VecDeque<PoolEntry<C>>,
-    active_count: usize,
-    closed: bool,
+pub(crate) struct PoolInner<C: Connection> {
+    pub(crate) idle: VecDeque<PoolEntry<C>>,
+    pub(crate) active_count: usize,
+    pub(crate) closed: bool,
 }
 
 impl<C: Connection> PoolInner<C> {
@@ -48,10 +55,33 @@ pub struct DruidDataSource<D: Driver> {
 }
 
 impl<D: Driver> DruidDataSource<D> {
+    /// 创建数据源（不挂载 Filter）
     pub fn new(driver: D, config: DruidConfig) -> Self {
+        let chain = FilterChain::new(&config.url);
+        Self::build(driver, config, chain)
+    }
+
+    /// 创建数据源并在构造期注入 Filter（SQL 防火墙 / 统计等接入点）
+    ///
+    /// 链在包装为 `Arc<FilterChain>` 前完成配置，运行期只读，因此无注册竞态。
+    /// 需要保留 Filter 句柄时传入 `Arc<StatFilter>` 等共享实例的克隆
+    /// （`Arc<T: Filter>` 本身即 Filter）。
+    pub fn with_filters(driver: D, config: DruidConfig, mut filters: Vec<Box<dyn Filter>>) -> Self {
+        if let Err(e) = FilterManager::init_filters(&mut filters) {
+            tracing::error!("Filter 初始化失败，仍按配置挂载: {}", e);
+        }
+        let chain = FilterManager::create_chain(&config.url, filters);
+        Self::build(driver, config, chain)
+    }
+
+    /// 创建数据源并接管一个已构建好的 FilterChain
+    pub fn with_chain(driver: D, config: DruidConfig, chain: FilterChain) -> Self {
+        Self::build(driver, config, chain)
+    }
+
+    fn build(driver: D, config: DruidConfig, chain: FilterChain) -> Self {
         let max = config.max_active.max(1);
         let driver = Arc::new(driver);
-        let fc = Arc::new(FilterChain::new(&config.url));
         let ps_cache_size = if config.pool_prepared_statements {
             config.max_pool_prepared_statement_per_connection_size
         } else {
@@ -62,7 +92,7 @@ impl<D: Driver> DruidDataSource<D> {
             config,
             semaphore: Arc::new(Semaphore::new(max)),
             inner: Arc::new(Mutex::new(PoolInner::new())),
-            filter_chain: fc,
+            filter_chain: Arc::new(chain),
             metrics: Arc::new(PoolMetrics::new()),
             pscache: Mutex::new(PSCache::new(ps_cache_size)),
             next_id: AtomicU64::new(1),
@@ -73,115 +103,72 @@ impl<D: Driver> DruidDataSource<D> {
     }
 
     pub async fn init(&self) -> Result<(), DruidError> {
+        if self.is_closed() {
+            return Err(DruidError::Pool("datasource is closed".into()));
+        }
+        // 参数自洽性校验：initial_size > max_active 这类配置会静默开出借不出去的连接
+        self.config.validate()?;
+        // `filters` 无法按名实例化（druid-pool 不依赖具体 Filter 实现），曾经只是空操作：
+        // 用户配了 filters = ["wall"] 却没有任何墙，是**安全配置的静默失效**。
+        // 这里硬报错而不是打日志——日志在生产里常常没人看。
+        if !self.config.filters.is_empty() {
+            return Err(DruidError::Config(
+                "DruidConfig::filters 未接线（无法按名实例化，druid-pool 不依赖具体 Filter 实现）；\
+                 请改用 DruidDataSource::with_filters(...) 注入"
+                    .into(),
+            ));
+        }
         if self.inited.swap(true, Ordering::SeqCst) {
             return Err(DruidError::Pool("already initialized".into()));
         }
+        self.warn_ineffective_configs();
         self.filter_chain.data_source_inited();
 
-        for _ in 0..self.config.initial_size {
-            if let Ok(e) = self.create_entry().await {
-                self.inner
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .idle
-                    .push_back(e);
+        // initial_size <= max_active 已由 validate() 前置保证，无需再钳制
+        let initial = self.config.initial_size;
+        for _ in 0..initial {
+            if self.is_closed() {
+                break; // close 与 init 竞态：停止回填
             }
+            let Ok(entry) = self.create_entry().await else {
+                continue;
+            };
+            let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            if g.closed {
+                drop(g);
+                self.metrics.inc_destroy();
+                self.filter_chain.connection_closed(entry.id);
+                spawn_close(entry.conn);
+                break;
+            }
+            g.idle.push_back(entry);
         }
         self.metrics.set_idle(self.idle_count());
         self.metrics.set_active(self.active_count());
 
-        // eviction and keepalive threads remain unchanged...
-        if self.config.time_between_eviction_runs_ms > 0 {
-            let inner = self.inner.clone();
-            let fchain = self.filter_chain.clone();
-            let metrics = self.metrics.clone();
-            let max_idle_ms = self.config.max_evictable_idle_time_ms;
-            let max_lifetime_ms = self.config.max_lifetime_ms;
-            let min_idle = self.config.min_idle;
-            let interval = self.config.eviction_interval();
-            let handle = tokio::spawn(async move {
-                loop {
-                    tokio::time::sleep(interval).await;
-                    let now = Instant::now();
-                    let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
-                    let current_idle = g.idle.len();
-                    let mut evicted = 0usize;
-                    let mut to_evict: Vec<PoolEntry<D::Connection>> = Vec::new();
-                    g.idle.retain(|e| {
-                        let idle_ms = now.duration_since(e.last_used_at).as_millis() as u64;
-                        let over_max_idle =
-                            (current_idle - evicted) > min_idle && idle_ms > max_idle_ms;
-                        let over_lifetime = max_lifetime_ms > 0
-                            && idle_ms > max_lifetime_ms
-                            && (current_idle - evicted) > min_idle;
-                        if over_max_idle || over_lifetime {
-                            evicted += 1;
-                            to_evict.push(PoolEntry {
-                                conn: e.conn.clone(),
-                                last_used_at: e.last_used_at,
-                                id: e.id,
-                            });
-                            false
-                        } else {
-                            true
-                        }
-                    });
-                    for e in &to_evict {
-                        metrics.inc_destroy();
-                        fchain.connection_closed(e.id);
-                    }
-                    metrics.set_idle(g.idle.len());
-                    drop(g);
-                    for e in to_evict {
-                        let c = e.conn;
-                        tokio::spawn(async move {
-                            let _ = c.close().await;
-                        });
-                    }
-                }
-            });
-            *self.evict_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
+        if self.is_closed() {
+            return Ok(()); // 已关闭：不再启动无人可停的后台循环
         }
 
-        // KeepAlive
+        // 后台维护循环（空闲驱逐 / KeepAlive）
+        if self.config.time_between_eviction_runs_ms > 0 {
+            let handle = background::spawn_eviction_loop::<D>(
+                self.inner.clone(),
+                self.filter_chain.clone(),
+                self.metrics.clone(),
+                self.config.clone(),
+            );
+            *self.evict_handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
+        }
         if self.config.keep_alive {
-            let inner = self.inner.clone();
-            let driver = self.driver.clone();
-            let interval = self.config.keep_alive_interval();
-            let handle = tokio::spawn(async move {
-                loop {
-                    tokio::time::sleep(interval).await;
-                    // 收集 (id, last_used_at, conn) 快照用于外部验证
-                    let snapshots: Vec<(u64, Instant, Arc<D::Connection>)> = {
-                        let g = inner.lock().unwrap_or_else(|e| e.into_inner());
-                        g.idle
-                            .iter()
-                            .map(|e| (e.id, e.last_used_at, e.conn.clone()))
-                            .collect()
-                    };
-                    for (conn_id, last_used_snapshot, conn) in &snapshots {
-                        if let Err(e) = driver.validate(conn).await {
-                            tracing::warn!(
-                                "KeepAlive validation failed for conn {}: {}, evicting",
-                                conn_id,
-                                e
-                            );
-                            let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
-                            // 仅驱逐仍在 idle 中且 last_used_at 未变化的连接
-                            // （若 last_used_at 已变，说明连接被 borrow 并归还过，不再驱逐）
-                            g.idle.retain(|entry| {
-                                entry.id != *conn_id || entry.last_used_at != *last_used_snapshot
-                            });
-                            if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                                let c = conn.clone();
-                                handle.spawn(async move {
-                                    let _ = c.close().await;
-                                });
-                            }
-                        }
-                    }
-                }
-            });
+            let handle = background::spawn_keepalive_loop::<D>(
+                self.inner.clone(),
+                self.driver.clone(),
+                self.metrics.clone(),
+                self.filter_chain.clone(),
+                self.semaphore.clone(),
+                self.config.clone(),
+            );
             *self
                 .keepalive_handle
                 .lock()
@@ -191,149 +178,186 @@ impl<D: Driver> DruidDataSource<D> {
         tracing::info!(
             "DruidDataSource init: max={}, init={}",
             self.config.max_active,
-            self.config.initial_size
+            initial
         );
         Ok(())
     }
 
+    /// 提示配置了但当前版本未生效的配置项（一次性汇总，避免刷屏）
+    fn warn_ineffective_configs(&self) {
+        let d = DruidConfig::default();
+        let c = &self.config;
+        let mut items: Vec<&str> = Vec::new();
+        if c.min_evictable_idle_time_ms != d.min_evictable_idle_time_ms {
+            items.push("min_evictable_idle_time_ms");
+        }
+        if c.test_while_idle {
+            items.push("test_while_idle");
+        }
+        if c.validation_query.is_some() {
+            items.push("validation_query");
+        }
+        if c.socket_timeout_secs != d.socket_timeout_secs {
+            items.push("socket_timeout_secs");
+        }
+        if !c.connection_properties.is_empty() {
+            items.push("connection_properties");
+        }
+        if c.driver_class_name.is_some() {
+            items.push("driver_class_name");
+        }
+        if !items.is_empty() {
+            tracing::warn!("DruidDataSource 配置项未生效: {}", items.join(", "));
+        }
+        if c.pool_prepared_statements {
+            tracing::warn!("pool_prepared_statements 仅创建了 PSCache 容器，尚未接入借用路径");
+        }
+    }
+
+    fn is_closed(&self) -> bool {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).closed
+    }
+
+    /// 获取并发许可：受 max_wait 限制
+    async fn acquire_permit(&self) -> Result<OwnedSemaphorePermit, DruidError> {
+        let acquire = self.semaphore.clone().acquire_owned();
+        let result = match self.config.max_wait() {
+            Some(max_wait) => tokio::time::timeout(max_wait, acquire)
+                .await
+                .map_err(|_| DruidError::Pool("connection wait timeout".into()))?,
+            None => acquire.await,
+        };
+        result.map_err(|_| DruidError::Pool("semaphore closed".into()))
+    }
+
+    /// max_lifetime 判定：按物理连接创建时刻，而非最近使用时刻
+    fn entry_alive(&self, e: &PoolEntry<D::Connection>) -> bool {
+        self.config.max_lifetime_ms == 0
+            || e.created_at.elapsed().as_millis() as u64 <= self.config.max_lifetime_ms
+    }
+
     pub async fn get_connection(&self) -> Result<PoolGuard<D>, DruidError> {
-        if self.inner.lock().unwrap_or_else(|e| e.into_inner()).closed {
+        if self.is_closed() {
             return Err(DruidError::Pool("datasource is closed".into()));
         }
         if !self.inited.load(Ordering::SeqCst) {
             return Err(DruidError::Pool("datasource not initialized".into()));
         }
+
         let start = Instant::now();
         self.metrics.inc_waiting();
 
-        let permit = if let Some(max_wait) = self.config.max_wait() {
-            match tokio::time::timeout(max_wait, self.semaphore.clone().acquire_owned()).await {
-                Ok(Ok(p)) => p,
-                Ok(Err(_)) => {
-                    self.metrics.dec_waiting();
-                    return Err(DruidError::Pool("semaphore closed".into()));
-                }
-                Err(_) => {
-                    self.metrics.dec_waiting();
-                    return Err(DruidError::Pool("connection wait timeout".into()));
-                }
-            }
-        } else {
-            match self.semaphore.clone().acquire_owned().await {
-                Ok(p) => p,
-                Err(_) => {
-                    self.metrics.dec_waiting();
-                    return Err(DruidError::Pool("semaphore closed".into()));
-                }
-            }
-        };
+        // 提前构造 Guard：connect/validate 等 await 都发生在 Guard 存在之后，
+        // 这样 future 被 drop（如 timeout 取消）时由 Drop 兜底——计数归位、
+        // 在途物理连接关闭，不会泄漏，active/waiting 也不会虚高固化。
+        let mut guard = PoolGuard::pending(
+            self.inner.clone(),
+            self.filter_chain.clone(),
+            self.metrics.clone(),
+            self.driver.clone(),
+            self.config.test_on_return,
+            self.config.validation_query_timeout_secs,
+        );
 
+        // 1) 等待并发许可（max_active 闸门）
+        guard.permit = Some(self.acquire_permit().await?);
+        // 等待期间数据源可能已被 close()：此时不得再创建/交付连接
+        if self.is_closed() {
+            return Err(DruidError::Pool("datasource is closed".into()));
+        }
         let wait_ms = start.elapsed().as_millis() as u64;
 
-        let (conn_id, conn, from_idle): (u64, Arc<D::Connection>, bool) = {
-            let idle_entry = {
-                let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-                g.active_count += 1;
-                let e = g.idle.pop_front();
-                self.metrics.set_active(g.active_count);
-                self.metrics.set_idle(g.idle.len());
-                e
-            };
-            // 借用时检查 idle 连接的 max_lifetime：过期则关闭并走新建路径
-            let use_entry = idle_entry.as_ref().filter(|e| {
-                if self.config.max_lifetime_ms > 0 {
-                    e.last_used_at.elapsed().as_millis() as u64 <= self.config.max_lifetime_ms
-                } else {
-                    true
+        // 2) 摘取空闲连接并计入 active
+        let idle_entry = {
+            let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            g.active_count += 1;
+            self.metrics.set_active(g.active_count);
+            let e = g.idle.pop_front();
+            self.metrics.set_idle(g.idle.len());
+            e
+        };
+        guard.counted = true;
+
+        // 3) 复用空闲连接，或（无空闲/已过期时）新建
+        match idle_entry.as_ref().filter(|e| self.entry_alive(e)) {
+            Some(e) => {
+                self.metrics.inc_cache_hit();
+                guard.conn_id = e.id;
+                guard.created_at = e.created_at;
+                guard.conn = Some(e.conn.clone());
+            }
+            None => {
+                if let Some(expired) = idle_entry {
+                    // 超过 max_lifetime 的空闲连接直接销毁
+                    self.metrics.inc_destroy();
+                    self.filter_chain.connection_closed(expired.id);
+                    spawn_close(expired.conn);
                 }
-            });
-            match use_entry {
-                Some(e) => {
-                    self.metrics.inc_cache_hit();
-                    (e.id, e.conn.clone(), true)
-                }
-                None => {
-                    // 过期连接需异步关闭
-                    if let Some(e) = idle_entry {
-                        self.metrics.inc_destroy();
-                        self.filter_chain.connection_closed(e.id);
-                        let c = e.conn.clone();
-                        tokio::spawn(async move {
-                            let _ = c.close().await;
-                        });
-                    }
-                    let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-                    let timeout = self.config.connect_timeout();
-                    let c = match self
-                        .driver
-                        .connect(
-                            &self.config.url,
-                            &self.config.username,
-                            &self.config.password,
-                            Some(timeout),
-                        )
-                        .await
-                    {
-                        Ok(conn) => conn,
-                        Err(e) => {
-                            let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-                            g.active_count = g.active_count.saturating_sub(1);
-                            self.metrics.set_active(g.active_count);
-                            self.metrics.dec_waiting();
-                            return Err(e);
-                        }
-                    };
-                    let c = Arc::new(c);
-                    self.metrics.inc_create();
-                    self.filter_chain.connection_created(id);
-                    (id, c, false)
+                let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+                guard.conn_id = id;
+                // connect 失败/被取消时 guard.conn 仍为空，Drop 只做计数归位
+                let c = self
+                    .driver
+                    .connect(
+                        &self.config.url,
+                        &self.config.username,
+                        &self.config.password,
+                        Some(self.config.connect_timeout()),
+                    )
+                    .await?;
+                // 连接已产生，之后任何取消都由 Drop 负责关闭
+                guard.conn = Some(Arc::new(c));
+                guard.created_at = Instant::now();
+                self.metrics.inc_create();
+                self.filter_chain.connection_created(id);
+                // connect 在途时可能已被 close()：不得交付 close() 看不见的连接（Drop 销毁它）
+                if self.is_closed() {
+                    return Err(DruidError::Pool("datasource is closed".into()));
                 }
             }
-        };
+        }
 
-        self.metrics.inc_borrow();
-        self.metrics
-            .add_wait_time_ns(start.elapsed().as_nanos() as u64);
-        self.filter_chain.connection_borrowed(conn_id, wait_ms);
+        // 4) 借出前钩子
+        self.filter_chain.connection_borrow_before(guard.conn_id);
 
+        // 5) 借用校验（受 validation_query_timeout_secs 约束，同时收窄取消窗口）
         if self.config.test_on_borrow {
-            if let Err(e) = self.driver.validate(&conn).await {
-                let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-                g.active_count = g.active_count.saturating_sub(1);
-                self.metrics.set_active(g.active_count);
-                if from_idle {
-                    self.metrics.set_idle(g.idle.len());
-                    self.metrics.inc_destroy();
-                    self.filter_chain.connection_closed(conn_id);
-                    let c = conn.clone();
-                    tokio::spawn(async move {
-                        let _ = c.close().await;
-                    });
-                } else {
-                    self.metrics.inc_destroy();
-                    self.filter_chain.connection_closed(conn_id);
-                    let c = conn.clone();
-                    tokio::spawn(async move {
-                        let _ = c.close().await;
-                    });
-                }
-                self.metrics.dec_waiting();
+            let conn = guard.conn.as_ref().expect("连接已在上一步创建或复用");
+            if let Err(e) = validate_with_timeout(
+                &*self.driver,
+                conn,
+                self.config.validation_query_timeout_secs,
+            )
+            .await
+            {
+                tracing::warn!(
+                    "test_on_borrow validation failed for connection {}: {}",
+                    guard.conn_id,
+                    e
+                );
+                self.filter_chain.connection_error(guard.conn_id, &e);
+                // healthy=false → Drop 物理关闭该连接
                 return Err(e);
             }
         }
 
-        self.metrics.dec_waiting();
+        // 6) 交付前最后一次复查：校验在途时可能已被 close()
+        //    （check-then-await 的窗口不限于 connect，凡 is_closed() 之后还有 await 都要复查）
+        if self.is_closed() {
+            return Err(DruidError::Pool("datasource is closed".into()));
+        }
 
-        Ok(PoolGuard {
-            conn,
-            conn_id,
-            permit: Some(permit),
-            inner: self.inner.clone(),
-            filter_chain: self.filter_chain.clone(),
-            metrics: self.metrics.clone(),
-            driver: self.driver.clone(),
-            test_on_return: self.config.test_on_return,
-        })
+        // 7) 成功交付
+        self.metrics.inc_borrow();
+        self.metrics
+            .add_wait_time_ns(start.elapsed().as_nanos() as u64);
+        self.filter_chain
+            .connection_borrowed(guard.conn_id, wait_ms);
+        // 等待在此结束：立刻归位 waiting，并置位避免 Drop 重复扣减
+        self.metrics.dec_waiting();
+        guard.waiting = false;
+        guard.healthy = true;
+        Ok(guard)
     }
 
     async fn create_entry(&self) -> Result<PoolEntry<D::Connection>, DruidError> {
@@ -353,6 +377,7 @@ impl<D: Driver> DruidDataSource<D> {
         Ok(PoolEntry {
             conn,
             last_used_at: Instant::now(),
+            created_at: Instant::now(),
             id,
         })
     }
@@ -375,33 +400,41 @@ impl<D: Driver> DruidDataSource<D> {
     pub fn max_active(&self) -> usize {
         self.config.max_active
     }
+    /// 池内物理连接总数（active + idle），在同一把锁下取样。
+    ///
+    /// 并发下分别调用 `active_count()` / `idle_count()` 会读到两个不同瞬间，
+    /// 可能把一次正常归还读成「总数超过 max_active」的假象。
+    pub fn pool_size(&self) -> usize {
+        let g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        g.active_count + g.idle.len()
+    }
+    /// Filter 链（构造期注入，运行期只读）
     pub fn filter_chain(&self) -> &FilterChain {
         &self.filter_chain
     }
     pub fn metrics(&self) -> &PoolMetrics {
         &self.metrics
     }
+    /// 池内权威指标的共享句柄。
+    ///
+    /// `metrics()` 只给引用，而 `StatFilter::bind_metrics` 需要所有权（绑定后
+    /// 控制台的 active/idle 直接读池内计数，不再由 StatFilter 自行累加，避免漂移）：
+    /// ```ignore
+    /// stat.bind_metrics(ds.metrics_arc());
+    /// ```
+    pub fn metrics_arc(&self) -> Arc<PoolMetrics> {
+        self.metrics.clone()
+    }
+    /// PreparedStatement 缓存容器；⚠️ 当前仅暴露未接入借用路径，开关无实际效果
     pub fn pscache(&self) -> &Mutex<PSCache> {
         &self.pscache
     }
 
     pub async fn close(&self) -> Result<(), DruidError> {
-        if let Some(h) = self
-            .evict_handle
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take()
-        {
-            h.abort();
-        }
-        if let Some(h) = self
-            .keepalive_handle
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take()
-        {
-            h.abort();
-        }
+        self.stop_background_loops();
+        // 唤醒所有在 semaphore 上排队的借用者（否则持有的 permit 不归还时永久挂起）；
+        // 它们醒来后因池已关闭而失败
+        self.semaphore.close();
         let conns: Vec<PoolEntry<D::Connection>> = {
             let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             g.closed = true;
@@ -415,364 +448,44 @@ impl<D: Driver> DruidDataSource<D> {
         tracing::info!("DruidDataSource closed");
         Ok(())
     }
-}
 
-/// 池连接 Guard — Drop 时自动归还
-pub struct PoolGuard<D: Driver> {
-    conn: Arc<D::Connection>,
-    conn_id: u64,
-    #[allow(dead_code)]
-    permit: Option<tokio::sync::OwnedSemaphorePermit>,
-    inner: Arc<Mutex<PoolInner<D::Connection>>>,
-    filter_chain: Arc<FilterChain>,
-    metrics: Arc<PoolMetrics>,
-    driver: Arc<D>,
-    test_on_return: bool,
-}
-
-impl<D: Driver> PoolGuard<D> {
-    pub fn connection(&self) -> &Arc<D::Connection> {
-        &self.conn
-    }
-    pub fn connection_id(&self) -> u64 {
-        self.conn_id
-    }
-}
-
-impl<D: Driver> Drop for PoolGuard<D> {
-    fn drop(&mut self) {
-        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        g.active_count = g.active_count.saturating_sub(1);
-        self.metrics.set_active(g.active_count);
-        if !g.closed {
-            if self.test_on_return {
-                if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                    let driver = self.driver.clone();
-                    let conn = self.conn.clone();
-                    let conn_id = self.conn_id;
-                    let inner = self.inner.clone();
-                    let fc = self.filter_chain.clone();
-                    let m = self.metrics.clone();
-                    handle.spawn(async move {
-                        if driver.validate(&conn).await.is_err() {
-                            tracing::warn!(
-                                "test_on_return validation failed for connection {}",
-                                conn_id
-                            );
-                            fc.connection_closed(conn_id);
-                            m.inc_destroy();
-                            let _ = conn.close().await;
-                        } else {
-                            let mut g = inner.lock().unwrap_or_else(|e| e.into_inner());
-                            fc.connection_returned(conn_id);
-                            g.idle.push_back(PoolEntry {
-                                conn,
-                                last_used_at: Instant::now(),
-                                id: conn_id,
-                            });
-                            m.set_idle(g.idle.len());
-                        }
-                    });
-                    return;
-                }
-                // fallthrough if no tokio runtime
+    fn stop_background_loops(&self) {
+        for slot in [&self.evict_handle, &self.keepalive_handle] {
+            if let Some(h) = slot.lock().unwrap_or_else(|e| e.into_inner()).take() {
+                h.abort();
             }
-            self.filter_chain.connection_returned(self.conn_id);
-            g.idle.push_back(PoolEntry {
-                conn: self.conn.clone(),
-                last_used_at: Instant::now(),
-                id: self.conn_id,
-            });
-            self.metrics.set_idle(g.idle.len());
-        } else {
-            self.filter_chain.connection_closed(self.conn_id);
-            self.metrics.set_idle(g.idle.len());
-            let c = self.conn.clone();
-            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        }
+    }
+}
+
+impl<D: Driver> Drop for DruidDataSource<D> {
+    fn drop(&mut self) {
+        // 未显式 close 就丢弃数据源：停掉后台循环并排空空闲连接
+        self.stop_background_loops();
+        let drained: Vec<PoolEntry<D::Connection>> = {
+            let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            g.closed = true;
+            g.idle.drain(..).collect()
+        };
+        if drained.is_empty() {
+            return;
+        }
+        let metrics = self.metrics.clone();
+        let fchain = self.filter_chain.clone();
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
                 handle.spawn(async move {
-                    if let Err(e) = c.close().await {
-                        tracing::error!("PoolGuard drop: failed to close connection: {}", e);
+                    for e in drained {
+                        metrics.inc_destroy();
+                        fchain.connection_closed(e.id);
+                        let _ = e.conn.close().await;
                     }
                 });
-            } else {
-                tracing::warn!(
-                    "PoolGuard dropped outside tokio runtime, connection {} may leak",
-                    self.conn_id
-                );
             }
+            Err(_) => tracing::warn!(
+                "DruidDataSource 在 tokio 运行时外析构，{} 条空闲连接未显式关闭",
+                drained.len()
+            ),
         }
-        // permit auto-released
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use druid_core::DruidConfig;
-    use std::time::Duration;
-
-    #[derive(Debug, Clone)]
-    struct MockConn {
-        id: u64,
-        closed: Arc<AtomicBool>,
-        driver_closed: Arc<AtomicU64>,
-    }
-
-    #[async_trait::async_trait]
-    impl Connection for MockConn {
-        async fn execute(&self, _: &str) -> Result<u64, DruidError> {
-            Ok(1)
-        }
-        async fn query(&self, _: &str) -> Result<Vec<Vec<String>>, DruidError> {
-            Ok(vec![])
-        }
-        async fn close(&self) -> Result<(), DruidError> {
-            self.closed.store(true, Ordering::SeqCst);
-            self.driver_closed.fetch_add(1, Ordering::SeqCst);
-            Ok(())
-        }
-        async fn ping(&self) -> Result<(), DruidError> {
-            Ok(())
-        }
-        fn connection_id(&self) -> u64 {
-            self.id
-        }
-    }
-
-    #[derive(Debug)]
-    struct MockDriver {
-        connect_count: AtomicU64,
-        closed: Arc<AtomicU64>,
-        validate_ok: AtomicBool,
-    }
-
-    impl MockDriver {
-        fn new(validate_ok: bool, closed: Arc<AtomicU64>) -> Self {
-            MockDriver {
-                connect_count: AtomicU64::new(0),
-                closed,
-                validate_ok: AtomicBool::new(validate_ok),
-            }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl Driver for MockDriver {
-        type Connection = MockConn;
-        async fn connect(
-            &self,
-            _: &str,
-            _: &str,
-            _: &str,
-            _: Option<Duration>,
-        ) -> Result<MockConn, DruidError> {
-            let id = self.connect_count.fetch_add(1, Ordering::SeqCst) + 1;
-            Ok(MockConn {
-                id,
-                closed: Arc::new(AtomicBool::new(false)),
-                driver_closed: self.closed.clone(),
-            })
-        }
-        fn name(&self) -> &'static str {
-            "MockDriver"
-        }
-        async fn validate(&self, _: &MockConn) -> Result<(), DruidError> {
-            if self.validate_ok.load(Ordering::SeqCst) {
-                Ok(())
-            } else {
-                Err(DruidError::Pool("invalid".into()))
-            }
-        }
-    }
-
-    /// 基础配置：禁用后台驱逐/保活循环，borrow 不做校验
-    fn cfg(url: &str) -> DruidConfig {
-        let mut c = DruidConfig::new(url, "u", "p");
-        c.time_between_eviction_runs_ms = 0;
-        c.test_on_borrow = false;
-        c
-    }
-
-    #[tokio::test]
-    async fn test_init_twice_fails() {
-        let ds = DruidDataSource::new(
-            MockDriver::new(true, Arc::new(AtomicU64::new(0))),
-            cfg("mock://a"),
-        );
-        assert!(ds.init().await.is_ok());
-        let err = ds.init().await.unwrap_err();
-        assert!(err.to_string().contains("already initialized"));
-    }
-
-    #[tokio::test]
-    async fn test_get_connection_before_init_fails() {
-        let ds = DruidDataSource::new(
-            MockDriver::new(true, Arc::new(AtomicU64::new(0))),
-            cfg("mock://a"),
-        );
-        let err = ds.get_connection().await.err().unwrap();
-        assert!(err.to_string().contains("not initialized"));
-    }
-
-    #[tokio::test]
-    async fn test_borrow_return_cycle_and_metrics() {
-        let driver = MockDriver::new(true, Arc::new(AtomicU64::new(0)));
-        let ds = DruidDataSource::new(driver, cfg("mock://a"));
-        ds.init().await.unwrap();
-
-        let g1 = ds.get_connection().await.unwrap();
-        assert_eq!(ds.active_count(), 1);
-        assert_eq!(ds.idle_count(), 0);
-        drop(g1);
-        assert_eq!(ds.active_count(), 0);
-        assert_eq!(ds.idle_count(), 1);
-
-        // 第二次借用命中空闲池：不新建连接
-        let g2 = ds.get_connection().await.unwrap();
-        assert_eq!(ds.metrics().create_count(), 1);
-        assert_eq!(ds.metrics().borrow_count(), 2);
-        assert_eq!(ds.metrics().cache_hit_count(), 1);
-        drop(g2);
-        assert_eq!(ds.active_count(), 0);
-        assert_eq!(ds.idle_count(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_max_lifetime_expiry_on_borrow() {
-        let driver = MockDriver::new(true, Arc::new(AtomicU64::new(0)));
-        let mut c = cfg("mock://a");
-        c.initial_size = 1;
-        c.max_lifetime_ms = 20;
-        let ds = DruidDataSource::new(driver, c);
-        ds.init().await.unwrap();
-        assert_eq!(ds.idle_count(), 1);
-
-        // 空闲超过 max_lifetime 后借用 → 过期连接被销毁并新建
-        tokio::time::sleep(Duration::from_millis(60)).await;
-        let g = ds.get_connection().await.unwrap();
-        assert_eq!(ds.metrics().create_count(), 2);
-        assert_eq!(ds.metrics().destroy_count(), 1);
-        assert_eq!(ds.metrics().cache_hit_count(), 0);
-        drop(g);
-    }
-
-    #[tokio::test]
-    async fn test_test_on_borrow_failure_closes_connection() {
-        let closed = Arc::new(AtomicU64::new(0));
-        let driver = MockDriver::new(false, closed.clone());
-        let mut c = cfg("mock://a");
-        c.test_on_borrow = true; // 本测试需要借用校验
-        let ds = DruidDataSource::new(driver, c);
-        ds.init().await.unwrap();
-
-        assert!(ds.get_connection().await.is_err());
-        assert_eq!(ds.active_count(), 0);
-        assert_eq!(ds.metrics().destroy_count(), 1);
-        // 新建连接校验失败也必须被 close（修复验证）
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        assert_eq!(closed.load(Ordering::SeqCst), 1);
-    }
-
-    #[tokio::test]
-    async fn test_test_on_return_failure_destroys_connection() {
-        let closed = Arc::new(AtomicU64::new(0));
-        let driver = MockDriver::new(false, closed.clone());
-        let mut c = cfg("mock://a");
-        c.initial_size = 1;
-        c.test_on_return = true;
-        let ds = DruidDataSource::new(driver, c);
-        ds.init().await.unwrap();
-
-        let g = ds.get_connection().await.unwrap();
-        drop(g); // 归还校验失败 → 连接被销毁而不是回到空闲池
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        assert_eq!(ds.idle_count(), 0);
-        assert_eq!(ds.active_count(), 0);
-        assert_eq!(ds.metrics().destroy_count(), 1);
-        assert_eq!(closed.load(Ordering::SeqCst), 1);
-    }
-
-    #[tokio::test]
-    async fn test_close_closes_idle_connections_and_rejects_borrows() {
-        let closed = Arc::new(AtomicU64::new(0));
-        let driver = MockDriver::new(true, closed.clone());
-        let mut c = cfg("mock://a");
-        c.initial_size = 2;
-        let ds = DruidDataSource::new(driver, c);
-        ds.init().await.unwrap();
-
-        ds.close().await.unwrap();
-        assert_eq!(ds.idle_count(), 0);
-        assert_eq!(closed.load(Ordering::SeqCst), 2); // 空闲连接同步关闭
-
-        let err = ds.get_connection().await.err().unwrap();
-        assert!(err.to_string().contains("closed"));
-    }
-
-    #[tokio::test]
-    async fn test_guard_dropped_after_close_closes_connection() {
-        let closed = Arc::new(AtomicU64::new(0));
-        let driver = MockDriver::new(true, closed.clone());
-        let mut c = cfg("mock://a");
-        c.initial_size = 1;
-        let ds = DruidDataSource::new(driver, c);
-        ds.init().await.unwrap();
-
-        let g = ds.get_connection().await.unwrap();
-        ds.close().await.unwrap();
-        drop(g); // close 之后归还 → 连接被关闭而非回池
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        assert_eq!(ds.idle_count(), 0);
-        assert_eq!(closed.load(Ordering::SeqCst), 1);
-    }
-
-    #[tokio::test]
-    async fn test_eviction_loop_evicts_idle_connections() {
-        let closed = Arc::new(AtomicU64::new(0));
-        let driver = MockDriver::new(true, closed.clone());
-        let mut c = cfg("mock://a");
-        c.initial_size = 2;
-        c.time_between_eviction_runs_ms = 20;
-        c.max_evictable_idle_time_ms = 1;
-        c.min_idle = 0;
-        let ds = DruidDataSource::new(driver, c);
-        ds.init().await.unwrap();
-        assert_eq!(ds.idle_count(), 2);
-
-        tokio::time::sleep(Duration::from_millis(150)).await;
-        assert_eq!(ds.idle_count(), 0);
-        assert!(ds.metrics().destroy_count() >= 2);
-        assert!(closed.load(Ordering::SeqCst) >= 2);
-        ds.close().await.unwrap(); // 终止后台循环
-    }
-
-    #[tokio::test]
-    async fn test_keepalive_evicts_invalid_idle_connections() {
-        let closed = Arc::new(AtomicU64::new(0));
-        let driver = MockDriver::new(false, closed.clone());
-        let mut c = cfg("mock://a");
-        c.initial_size = 1;
-        c.keep_alive = true;
-        c.keep_alive_between_time_ms = 20;
-        let ds = DruidDataSource::new(driver, c);
-        ds.init().await.unwrap();
-        assert_eq!(ds.idle_count(), 1);
-
-        tokio::time::sleep(Duration::from_millis(150)).await;
-        assert_eq!(ds.idle_count(), 0); // 校验失败的空闲连接被保活循环驱逐
-        assert!(closed.load(Ordering::SeqCst) >= 1);
-        ds.close().await.unwrap(); // 终止后台循环
-    }
-
-    #[tokio::test]
-    async fn test_pscache_exposed_with_config() {
-        let mut c = cfg("mock://a");
-        c.pool_prepared_statements = true;
-        c.max_pool_prepared_statement_per_connection_size = 2;
-        let ds = DruidDataSource::new(MockDriver::new(true, Arc::new(AtomicU64::new(0))), c);
-        let mut cache = ds.pscache().lock().unwrap();
-        assert!(!cache.get("SELECT 1"));
-        cache.put("SELECT 1");
-        assert!(cache.get("SELECT 1"));
     }
 }

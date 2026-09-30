@@ -5,7 +5,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use druid_core::DruidError;
 use druid_pool::driver::Driver;
@@ -14,15 +14,34 @@ use druid_pool::DruidDataSource;
 /// 数据源节点状态
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeStatus {
-    Active,  // 正常
-    Down,    // 故障
-    Testing, // 探测中
+    Active, // 正常
+    Down,   // 故障
+}
+
+/// 单个节点的探测状态：连续失败/成功计数与退避截止时间
+#[derive(Debug)]
+struct ProbeState {
+    consecutive_failures: u32,
+    consecutive_successes: u32,
+    /// Down 节点下次允许探测的时间；None 表示立即可探测
+    retry_at: Option<Instant>,
+}
+
+impl ProbeState {
+    fn new() -> Self {
+        ProbeState {
+            consecutive_failures: 0,
+            consecutive_successes: 0,
+            retry_at: None,
+        }
+    }
 }
 
 /// 数据源节点
 struct HaNode<D: Driver> {
     datasource: Arc<DruidDataSource<D>>,
     status: Mutex<NodeStatus>,
+    probe: Mutex<ProbeState>,
     weight: usize,
     name: String,
 }
@@ -34,6 +53,16 @@ pub struct HighAvailableDataSource<D: Driver> {
     round_robin: AtomicUsize,
     /// 健康检查间隔
     check_interval: Duration,
+    /// 探测超时；None 时取 check_interval 的 1/4
+    probe_timeout: Option<Duration>,
+    /// 连续失败 N 次才标记 Down
+    failure_threshold: u32,
+    /// 恢复需连续成功 M 次
+    success_threshold: u32,
+    /// 故障节点指数退避的上限
+    max_backoff: Duration,
+    /// 健康检查循环的退出通知
+    shutdown_signal: tokio::sync::Notify,
     /// 健康检查 SQL
     validation_sql: String,
 }
@@ -50,6 +79,11 @@ impl<D: Driver> HighAvailableDataSource<D> {
             nodes: Vec::new(),
             round_robin: AtomicUsize::new(0),
             check_interval: Duration::from_secs(30),
+            probe_timeout: None,
+            failure_threshold: 3,
+            success_threshold: 2,
+            max_backoff: Duration::from_secs(300),
+            shutdown_signal: tokio::sync::Notify::new(),
             validation_sql: "SELECT 1".to_string(),
         }
     }
@@ -60,6 +94,7 @@ impl<D: Driver> HighAvailableDataSource<D> {
         let node = Arc::new(HaNode {
             datasource: Arc::new(ds),
             status: Mutex::new(NodeStatus::Active),
+            probe: Mutex::new(ProbeState::new()),
             weight: weight.max(1),
             name: name.to_string(),
         });
@@ -69,6 +104,26 @@ impl<D: Driver> HighAvailableDataSource<D> {
     /// 设置健康检查间隔
     pub fn set_check_interval(&mut self, interval: Duration) {
         self.check_interval = interval;
+    }
+
+    /// 设置探测超时；不设置时取 check_interval 的 1/4
+    pub fn set_probe_timeout(&mut self, timeout: Duration) {
+        self.probe_timeout = Some(timeout);
+    }
+
+    /// 连续失败达到 n 次才标记 Down（默认 3）
+    pub fn set_failure_threshold(&mut self, n: u32) {
+        self.failure_threshold = n.max(1);
+    }
+
+    /// 恢复需连续成功 n 次（默认 2）
+    pub fn set_success_threshold(&mut self, n: u32) {
+        self.success_threshold = n.max(1);
+    }
+
+    /// 设置故障节点指数退避的上限（默认 300s）
+    pub fn set_max_backoff(&mut self, backoff: Duration) {
+        self.max_backoff = backoff;
     }
 
     /// 设置验证 SQL
@@ -103,23 +158,23 @@ impl<D: Driver> HighAvailableDataSource<D> {
         Ok(active[0].datasource.clone())
     }
 
-    /// 标记节点故障
+    /// 标记节点故障（重置探测计数）
     pub fn mark_down(&self, name: &str) {
         for node in &self.nodes {
             if node.name == name {
-                *node.status.lock().unwrap_or_else(|e| e.into_inner()) = NodeStatus::Down;
-                tracing::warn!("HA node {} marked DOWN", name);
+                self.set_status(node, NodeStatus::Down);
+                self.reset_probe_state(node);
                 return;
             }
         }
     }
 
-    /// 标记节点恢复
+    /// 标记节点恢复（重置探测计数）
     pub fn mark_up(&self, name: &str) {
         for node in &self.nodes {
             if node.name == name {
-                *node.status.lock().unwrap_or_else(|e| e.into_inner()) = NodeStatus::Active;
-                tracing::info!("HA node {} marked ACTIVE", name);
+                self.set_status(node, NodeStatus::Active);
+                self.reset_probe_state(node);
                 return;
             }
         }
@@ -143,290 +198,130 @@ impl<D: Driver> HighAvailableDataSource<D> {
         self.nodes.iter().map(|n| n.name.clone()).collect()
     }
 
+    /// 设置节点状态并记录日志（不重置探测计数，供巡检内部使用）
+    fn set_status(&self, node: &HaNode<D>, status: NodeStatus) {
+        *node.status.lock().unwrap_or_else(|e| e.into_inner()) = status.clone();
+        match status {
+            NodeStatus::Active => tracing::info!("HA node {} marked ACTIVE", node.name),
+            NodeStatus::Down => tracing::warn!("HA node {} marked DOWN", node.name),
+        }
+    }
+
+    /// 重置节点的探测计数与退避
+    fn reset_probe_state(&self, node: &HaNode<D>) {
+        *node.probe.lock().unwrap_or_else(|e| e.into_inner()) = ProbeState::new();
+    }
+
+    /// 实际生效的探测超时
+    fn effective_probe_timeout(&self) -> Duration {
+        self.probe_timeout.unwrap_or(self.check_interval / 4)
+    }
+
+    /// Down 节点的退避时长：check_interval * 2^(超出失败阈值的次数)，上限 max_backoff
+    fn backoff(&self, consecutive_failures: u32) -> Duration {
+        let exp = consecutive_failures
+            .saturating_sub(self.failure_threshold)
+            .min(16); // 防止移位溢出
+        self.check_interval
+            .saturating_mul(1u32 << exp)
+            .min(self.max_backoff)
+    }
+
     /// 执行一轮健康检查
-    pub async fn run_health_check(self: &Arc<Self>) {
+    ///
+    /// 取消安全：探测结束前不写入任何状态，因此调用方用 `timeout`/`select!`
+    /// 打断本函数不会让节点卡在中间状态。
+    pub async fn run_health_check(&self) {
+        let timeout = self.effective_probe_timeout();
         for node in &self.nodes {
-            let status = {
-                node.status
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .clone()
+            // 快照状态与退避截止时间（不嵌套持锁，避免与 mark_down/mark_up 死锁）
+            let status = node
+                .status
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            let retry_at = node
+                .probe
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .retry_at;
+
+            // Down 节点按指数退避重试，避免每轮无条件重试打爆故障后端
+            if status == NodeStatus::Down && retry_at.is_some_and(|t| Instant::now() < t) {
+                tracing::debug!("HA node {} 处于退避窗口，本轮跳过探测", node.name);
+                continue;
+            }
+
+            // 探测借用业务连接池，超时防止单个节点挂住整个巡检任务
+            let ok = match tokio::time::timeout(timeout, node.datasource.get_connection()).await {
+                Ok(Ok(guard)) => {
+                    drop(guard);
+                    true
+                }
+                Ok(Err(e)) => {
+                    tracing::debug!("HA node {} 探测失败: {}", node.name, e);
+                    false
+                }
+                Err(_) => {
+                    tracing::warn!("HA node {} 探测超时（{:?}）", node.name, timeout);
+                    false
+                }
             };
-            match status {
-                NodeStatus::Active => {
-                    if let Ok(guard) = node.datasource.get_connection().await {
-                        drop(guard);
-                    } else {
-                        self.mark_down(&node.name);
+
+            let mut ps = node.probe.lock().unwrap_or_else(|e| e.into_inner());
+            if ok {
+                ps.consecutive_failures = 0;
+                ps.retry_at = None;
+                if status == NodeStatus::Down {
+                    // 恢复需连续成功 M 次，避免抖动节点立刻全量放回
+                    ps.consecutive_successes += 1;
+                    if ps.consecutive_successes >= self.success_threshold {
+                        ps.consecutive_successes = 0;
+                        drop(ps);
+                        self.set_status(node, NodeStatus::Active);
                     }
+                } else {
+                    ps.consecutive_successes = 0;
                 }
-                NodeStatus::Down => {
-                    {
-                        *node.status.lock().unwrap_or_else(|e| e.into_inner()) =
-                            NodeStatus::Testing;
-                    }
-                    if let Ok(guard) = node.datasource.get_connection().await {
-                        drop(guard);
-                        self.mark_up(&node.name);
-                    } else {
-                        *node.status.lock().unwrap_or_else(|e| e.into_inner()) = NodeStatus::Down;
-                    }
+            } else {
+                ps.consecutive_successes = 0;
+                ps.consecutive_failures += 1;
+                ps.retry_at = Some(Instant::now() + self.backoff(ps.consecutive_failures));
+                // 连续失败达到阈值才摘除，网络抖动不再立刻踢节点
+                let trip = status == NodeStatus::Active
+                    && ps.consecutive_failures >= self.failure_threshold;
+                drop(ps);
+                if trip {
+                    self.set_status(node, NodeStatus::Down);
                 }
-                NodeStatus::Testing => {}
             }
         }
     }
 
     /// 启动健康检查循环（需在 tokio 上下文中调用）
-    pub fn spawn_health_check_loop(self: &Arc<Self>) {
+    ///
+    /// 返回 `JoinHandle`；调用 [`Self::shutdown`] 通知循环退出，循环彻底结束前
+    /// 仍持有本对象的 Arc，需 await 该 handle 才能完成回收。
+    pub fn spawn_health_check_loop(self: &Arc<Self>) -> tokio::task::JoinHandle<()> {
         let this = self.clone();
         let interval = this.check_interval;
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(interval).await;
+                tokio::select! {
+                    _ = tokio::time::sleep(interval) => {}
+                    // notify_one 会保留许可：巡检进行中发出的退出信号也不会丢失
+                    _ = this.shutdown_signal.notified() => break,
+                }
                 this.run_health_check().await;
             }
-        });
+        })
+    }
+
+    /// 通知健康检查循环退出（需 await spawn 返回的 JoinHandle 等待任务结束）
+    pub fn shutdown(&self) {
+        self.shutdown_signal.notify_one();
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use druid_pool::driver::{Connection, Driver};
-    use std::sync::atomic::AtomicU64;
-
-    #[derive(Debug, Clone)]
-    struct MockHaConn {
-        id: u64,
-        closed: Arc<Mutex<bool>>,
-    }
-    impl MockHaConn {
-        fn new(id: u64) -> Self {
-            MockHaConn {
-                id,
-                closed: Arc::new(Mutex::new(false)),
-            }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl Connection for MockHaConn {
-        async fn execute(&self, _: &str) -> Result<u64, DruidError> {
-            Ok(1)
-        }
-        async fn query(&self, _: &str) -> Result<Vec<Vec<String>>, DruidError> {
-            Ok(vec![])
-        }
-        async fn close(&self) -> Result<(), DruidError> {
-            *self.closed.lock().unwrap_or_else(|e| e.into_inner()) = true;
-            Ok(())
-        }
-        async fn ping(&self) -> Result<(), DruidError> {
-            Ok(())
-        }
-        fn connection_id(&self) -> u64 {
-            self.id
-        }
-    }
-
-    #[derive(Debug)]
-    struct MockHaDriver {
-        counter: Arc<AtomicU64>,
-    }
-    impl MockHaDriver {
-        fn new() -> Self {
-            MockHaDriver {
-                counter: Arc::new(AtomicU64::new(0)),
-            }
-        }
-        fn with_counter(counter: Arc<AtomicU64>) -> Self {
-            MockHaDriver { counter }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl Driver for MockHaDriver {
-        type Connection = MockHaConn;
-        async fn connect(
-            &self,
-            _: &str,
-            _: &str,
-            _: &str,
-            _: Option<std::time::Duration>,
-        ) -> Result<MockHaConn, DruidError> {
-            let id = self.counter.fetch_add(1, Ordering::SeqCst) + 1;
-            Ok(MockHaConn::new(id))
-        }
-        fn name(&self) -> &'static str {
-            "MockHaDriver"
-        }
-        async fn validate(&self, _: &MockHaConn) -> Result<(), DruidError> {
-            Ok(())
-        }
-    }
-
-    /// 连接总是失败的驱动
-    struct FailingHaDriver;
-
-    #[async_trait::async_trait]
-    impl Driver for FailingHaDriver {
-        type Connection = MockHaConn;
-        async fn connect(
-            &self,
-            _: &str,
-            _: &str,
-            _: &str,
-            _: Option<std::time::Duration>,
-        ) -> Result<MockHaConn, DruidError> {
-            Err(DruidError::Database("backend down".into()))
-        }
-        fn name(&self) -> &'static str {
-            "FailingHaDriver"
-        }
-        async fn validate(&self, _: &MockHaConn) -> Result<(), DruidError> {
-            Ok(())
-        }
-    }
-
-    fn ha_cfg(url: &str) -> druid_core::DruidConfig {
-        let mut c = druid_core::DruidConfig::new(url, "u", "p");
-        c.initial_size = 0;
-        c.max_active = 4;
-        c.test_on_borrow = false;
-        c.time_between_eviction_runs_ms = 0;
-        c
-    }
-
-    #[tokio::test]
-    async fn test_ha_round_robin() {
-        let mut ha = HighAvailableDataSource::new();
-        let mut cfg1 = druid_core::DruidConfig::new("mock://n1", "u", "p");
-        cfg1.initial_size = 0;
-        cfg1.max_active = 2;
-        cfg1.test_on_borrow = false;
-        let ds1 = DruidDataSource::new(MockHaDriver::new(), cfg1);
-        let mut cfg2 = druid_core::DruidConfig::new("mock://n2", "u", "p");
-        cfg2.initial_size = 0;
-        cfg2.max_active = 2;
-        cfg2.test_on_borrow = false;
-        let ds2 = DruidDataSource::new(MockHaDriver::new(), cfg2);
-        let _ = ds1.init().await;
-        let _ = ds2.init().await;
-        ha.add_node("node-1", ds1, 1);
-        ha.add_node("node-2", ds2, 1);
-
-        let result = ha.get_datasource().await;
-        assert!(result.is_ok());
-        assert_eq!(ha.active_count(), 2);
-        assert_eq!(ha.node_count(), 2);
-    }
-
-    #[tokio::test]
-    async fn test_mark_down_up() {
-        let mut ha = HighAvailableDataSource::new();
-        let mut cfg = druid_core::DruidConfig::new("mock://n1", "u", "p");
-        cfg.initial_size = 0;
-        cfg.max_active = 1;
-        cfg.test_on_borrow = false;
-        let ds = DruidDataSource::new(MockHaDriver::new(), cfg);
-        let _ = ds.init().await;
-        ha.add_node("node-1", ds, 1);
-
-        assert_eq!(ha.node_count(), 1);
-        assert_eq!(ha.active_count(), 1);
-
-        ha.mark_down("node-1");
-        assert_eq!(ha.active_count(), 0);
-
-        ha.mark_up("node-1");
-        assert_eq!(ha.active_count(), 1);
-
-        // mark non-existent node should not panic
-        ha.mark_down("node-x");
-        ha.mark_up("node-x");
-        assert_eq!(ha.node_count(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_ha_no_active_node_returns_error() {
-        let ha = HighAvailableDataSource::<MockHaDriver>::new();
-        let err = ha.get_datasource().await.err().unwrap();
-        assert!(err.to_string().contains("no active"));
-        assert_eq!(ha.active_count(), 0);
-        assert!(ha.node_names().is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_ha_weighted_round_robin_distribution() {
-        let c1 = Arc::new(AtomicU64::new(0));
-        let c2 = Arc::new(AtomicU64::new(0));
-        let mut ha = HighAvailableDataSource::new();
-        let ds1 = DruidDataSource::new(MockHaDriver::with_counter(c1.clone()), ha_cfg("mock://n1"));
-        let ds2 = DruidDataSource::new(MockHaDriver::with_counter(c2.clone()), ha_cfg("mock://n2"));
-        ds1.init().await.unwrap();
-        ds2.init().await.unwrap();
-        ha.add_node("a", ds1, 2);
-        ha.add_node("b", ds2, 1);
-        assert_eq!(ha.node_names(), vec!["a", "b"]);
-
-        // 权重 2:1，6 次借用 → a 4 次、b 2 次（借用期间保持 guard 不归还，强制新建连接）
-        let mut guards: Vec<_> = Vec::new();
-        for _ in 0..6 {
-            let ds = ha.get_datasource().await.unwrap();
-            guards.push(ds.get_connection().await.unwrap());
-        }
-        assert_eq!(c1.load(Ordering::SeqCst), 4);
-        assert_eq!(c2.load(Ordering::SeqCst), 2);
-    }
-
-    #[tokio::test]
-    async fn test_ha_zero_weight_no_panic() {
-        let mut ha = HighAvailableDataSource::new();
-        let ds = DruidDataSource::new(MockHaDriver::new(), ha_cfg("mock://n1"));
-        ds.init().await.unwrap();
-        ha.add_node("only", ds, 0); // 修复前：total_weight=0 取模除零 panic
-        let ds = ha.get_datasource().await.unwrap();
-        let _g = ds.get_connection().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_ha_health_check_recovers_down_node() {
-        let mut ha = HighAvailableDataSource::new();
-        let ds = DruidDataSource::new(MockHaDriver::new(), ha_cfg("mock://n1"));
-        ds.init().await.unwrap();
-        ha.add_node("n1", ds, 1);
-        ha.mark_down("n1");
-        assert_eq!(ha.active_count(), 0);
-
-        let ha = Arc::new(ha);
-        ha.run_health_check().await; // Down → Testing → 成功 → Active
-        assert_eq!(ha.active_count(), 1);
-    }
-
-    #[tokio::test]
-    async fn test_ha_health_check_keeps_down_node_down() {
-        let mut ha = HighAvailableDataSource::new();
-        let ds = DruidDataSource::new(FailingHaDriver, ha_cfg("mock://n1"));
-        ds.init().await.unwrap();
-        ha.add_node("n1", ds, 1);
-        ha.mark_down("n1");
-
-        let ha = Arc::new(ha);
-        ha.run_health_check().await; // 探测失败 → 保持 Down
-        assert_eq!(ha.active_count(), 0);
-    }
-
-    #[tokio::test]
-    async fn test_ha_health_check_marks_failing_active_down() {
-        let mut ha = HighAvailableDataSource::new();
-        let ds = DruidDataSource::new(FailingHaDriver, ha_cfg("mock://n1"));
-        ds.init().await.unwrap();
-        ha.add_node("n1", ds, 1);
-        assert_eq!(ha.active_count(), 1);
-
-        let ha = Arc::new(ha);
-        ha.run_health_check().await; // 活跃节点健康检查失败 → 标记 Down
-        assert_eq!(ha.active_count(), 0);
-    }
-}
+mod tests;

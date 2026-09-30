@@ -39,8 +39,18 @@ impl SchemaVisitor {
         for expr in &stmt.group_by {
             self.visit_expr(expr, "");
         }
+        // HAVING / LIMIT / OFFSET 同样引用列和子查询，漏访会让权限/血缘分析漏检
+        if let Some(ref having) = stmt.having {
+            self.visit_expr(having, "");
+        }
         for item in &stmt.order_by {
             self.visit_expr(&item.expr, "");
+        }
+        if let Some(ref limit) = stmt.limit {
+            self.visit_expr(limit, "");
+        }
+        if let Some(ref offset) = stmt.offset {
+            self.visit_expr(offset, "");
         }
     }
 
@@ -49,6 +59,13 @@ impl SchemaVisitor {
         self.tables.insert(stmt.table.clone());
         for col in &stmt.columns {
             self.add_column(&stmt.table, col);
+        }
+        // VALUES 里的表达式可能含子查询（INSERT INTO t VALUES ((SELECT max(id) FROM u))），
+        // 不遍历则表 u 完全不可见
+        for row in &stmt.values {
+            for value in row {
+                self.visit_expr(value, &stmt.table);
+            }
         }
     }
 
@@ -299,6 +316,33 @@ mod tests {
         // 列按别名归属（现有约定）
         assert!(v.columns.get("a").unwrap().contains("id"));
         assert!(v.columns.get("o").unwrap().contains("uid"));
+    }
+
+    #[test]
+    fn test_visitor_having_limit_offset() {
+        let v = visit(
+            "SELECT e.dept, SUM(e.salary) FROM emp e GROUP BY e.dept \
+             HAVING SUM(e.salary) > 1000 AND e.dept IN (SELECT d.id FROM dept_t d) \
+             ORDER BY e.bonus LIMIT 10 OFFSET 5",
+        );
+        // HAVING / ORDER BY 里的表和列不能被漏掉
+        assert!(v.tables.contains("dept_t"), "{:?}", v.tables);
+        assert!(v.columns.get("d").unwrap().contains("id"));
+        assert!(v.columns.get("e").unwrap().contains("bonus"));
+        assert!(v.columns.get("e").unwrap().contains("salary"));
+
+        // LIMIT / OFFSET 里的表达式同样要访问
+        let v = visit("SELECT a FROM t LIMIT (SELECT n FROM lim) OFFSET (SELECT o FROM offs)");
+        assert!(v.tables.contains("lim"), "{:?}", v.tables);
+        assert!(v.tables.contains("offs"), "{:?}", v.tables);
+    }
+
+    #[test]
+    fn test_visitor_insert_values_subquery() {
+        let v = visit("INSERT INTO t VALUES ((SELECT max(id) FROM u))");
+        assert!(v.tables.contains("t"));
+        // VALUES 里的子查询表不能被漏掉
+        assert!(v.tables.contains("u"), "{:?}", v.tables);
     }
 
     #[test]

@@ -118,6 +118,8 @@ pub enum Token {
     Number(String),
     StringLit(String),
     HexString(String),
+    /// MySQL 变量引用：@user_var / @@system_var（含 @@GLOBAL.name 形式）
+    Variable(String),
     Placeholder,
     Eq,
     Neq,
@@ -152,7 +154,9 @@ impl fmt::Display for Token {
             Token::Ident(s) => write!(f, "{}", s),
             Token::QuotedIdent(s) => write!(f, "\"{}\"", s),
             Token::Number(n) => write!(f, "{}", n),
-            Token::StringLit(s) => write!(f, "'{}'", s),
+            // 与 format.rs 一致：单引号加倍、反斜杠加倍，否则 Display 输出无法重新解析
+            Token::StringLit(s) => write!(f, "'{}'", s.replace('\\', "\\\\").replace('\'', "''")),
+            Token::Variable(s) => write!(f, "{}", s),
             Token::Placeholder => write!(f, "?"),
             Token::Eq => write!(f, "="),
             Token::Neq => write!(f, "<>"),
@@ -360,7 +364,8 @@ mod tests {
     fn test_token_display() {
         assert_eq!(format!("{}", Token::Ident("abc".into())), "abc");
         assert_eq!(format!("{}", Token::QuotedIdent("x".into())), "\"x\"");
-        assert_eq!(format!("{}", Token::StringLit("it's".into())), "'it's'");
+        assert_eq!(format!("{}", Token::StringLit("it's".into())), "'it''s'");
+        assert_eq!(format!("{}", Token::StringLit(r"a\b".into())), r"'a\\b'");
         assert_eq!(format!("{}", Token::Number("3.14".into())), "3.14");
         assert_eq!(format!("{}", Token::Placeholder), "?");
         assert_eq!(format!("{}", Token::Neq), "<>");

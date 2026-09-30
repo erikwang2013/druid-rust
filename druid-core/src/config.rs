@@ -1,3 +1,5 @@
+use crate::redact;
+use crate::DruidError;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -172,6 +174,34 @@ impl DruidConfig {
     pub fn connect_timeout(&self) -> Duration {
         Duration::from_secs(self.connect_timeout_secs)
     }
+
+    /// 校验连接池参数的合法性
+    ///
+    /// 参数不自洽会静默浪费连接：例如 `initial_size = 100, max_active = 8` 时
+    /// 连接池初始化会真开 100 条连接，其中 92 条永远借不出去，
+    /// 多实例部署会直接撞爆服务端 max_connections。
+    ///
+    /// 注意：需要由 datasource/pool 的初始化路径主动调用（本 crate 不反向依赖它们）。
+    pub fn validate(&self) -> Result<(), DruidError> {
+        if self.max_active == 0 {
+            return Err(DruidError::Config("max_active is 0".into()));
+        }
+        if self.min_idle > self.max_active {
+            return Err(DruidError::Config("min_idle > max_active".into()));
+        }
+        if self.initial_size > self.max_active {
+            return Err(DruidError::Config("initial_size > max_active".into()));
+        }
+        if self.connect_timeout_secs == 0 {
+            return Err(DruidError::Config("connect_timeout_secs is 0".into()));
+        }
+        // KeepAlive 开着但间隔为 0：background.rs 的循环 sleep(0) 空转，每轮打库
+        // （驱逐间隔 0 = 禁用循环，不是缺陷，故只校验这一项）
+        if self.keep_alive && self.keep_alive_between_time_ms == 0 {
+            return Err(DruidError::Config("keep_alive interval is 0".into()));
+        }
+        Ok(())
+    }
 }
 
 impl Default for DruidConfig {
@@ -182,8 +212,16 @@ impl Default for DruidConfig {
 
 impl std::fmt::Debug for DruidConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // 打印前先脱敏（fail-closed，见 crate::redact）：url 里的 userinfo 口令、
+        // 查询串/连接属性中的敏感与未建模参数
+        let url = redact::sanitize_url(&self.url);
+        let properties: Vec<String> = self
+            .connection_properties
+            .iter()
+            .map(|p| redact::sanitize_value(p))
+            .collect();
         f.debug_struct("DruidConfig")
-            .field("url", &self.url)
+            .field("url", &url)
             .field("username", &self.username)
             .field("password", &"***")
             .field("driver_class_name", &self.driver_class_name)
@@ -222,7 +260,7 @@ impl std::fmt::Debug for DruidConfig {
                 &self.keep_alive_between_time_ms,
             )
             .field("filters", &self.filters)
-            .field("connection_properties", &self.connection_properties)
+            .field("connection_properties", &properties)
             .field("connect_timeout_secs", &self.connect_timeout_secs)
             .field("socket_timeout_secs", &self.socket_timeout_secs)
             .finish()
@@ -306,6 +344,114 @@ mod tests {
         assert!(!dbg.contains("topsecret"));
         assert!(dbg.contains("***"));
         assert!(dbg.contains("root"));
+    }
+
+    #[test]
+    fn test_debug_masks_url_credentials_and_secrets() {
+        // 旧实现只屏蔽 password 字段，url 里的 userinfo 与查询串口令会原样进日志
+        let cfg = DruidConfig::new(
+            "jdbc:mysql://u:p@h/db?password=x&user=keep",
+            "u",
+            "topsecret",
+        );
+        let dbg = format!("{:?}", cfg);
+        assert!(!dbg.contains(":p@")); // userinfo 口令
+        assert!(!dbg.contains("password=x")); // 查询串口令
+        assert!(dbg.contains("u:***@h")); // 用户名保留，口令打码
+        assert!(dbg.contains("password=***"));
+        assert!(dbg.contains("user=keep")); // 非敏感参数原样保留
+        assert!(!dbg.contains("topsecret"));
+    }
+
+    #[test]
+    fn test_debug_masks_connection_properties() {
+        let mut cfg = DruidConfig::new("jdbc:mysql://h/db", "root", "pw");
+        cfg.connection_properties = vec![
+            "user=root".into(),
+            "password=s3cret".into(),
+            "accessToken=tok123".into(),
+        ];
+        let dbg = format!("{:?}", cfg);
+        assert!(!dbg.contains("s3cret"));
+        assert!(!dbg.contains("tok123"));
+        assert!(dbg.contains("user=root"));
+        assert!(dbg.contains("password=***"));
+        assert!(dbg.contains("accessToken=***"));
+    }
+
+    #[test]
+    fn test_debug_masks_sqlserver_style_url() {
+        // 分号分隔、无 ?（SQL Server JDBC 常见形式）
+        let cfg = DruidConfig::new(
+            "jdbc:sqlserver://h:1433;user=root;password=s3cret",
+            "root",
+            "",
+        );
+        let dbg = format!("{:?}", cfg);
+        assert!(!dbg.contains("s3cret"));
+        assert!(dbg.contains("h:1433")); // 端口不受影响
+        assert!(dbg.contains("user=root"));
+        assert!(dbg.contains("password=***"));
+    }
+
+    #[test]
+    fn test_debug_masks_oracle_thin_url() {
+        let cfg = DruidConfig::new("jdbc:oracle:thin:scott/tiger@h:1521/orcl", "scott", "");
+        let dbg = format!("{:?}", cfg);
+        assert!(!dbg.contains("tiger"));
+        assert!(dbg.contains("scott/***@h:1521/orcl"));
+    }
+
+    #[test]
+    fn test_validate_rejects_inconsistent_pool_params() {
+        let base = DruidConfig::new("jdbc:mysql://h/db", "u", "p");
+        assert!(base.validate().is_ok());
+
+        let mut c = base.clone();
+        c.max_active = 0;
+        assert!(matches!(c.validate(), Err(DruidError::Config(_))));
+
+        let mut c = base.clone();
+        c.min_idle = base.max_active + 1;
+        assert!(matches!(c.validate(), Err(DruidError::Config(_))));
+
+        let mut c = base.clone();
+        c.initial_size = 100; // > max_active(8)：init 会真开 100 条连接，92 条永远借不到
+        assert!(matches!(c.validate(), Err(DruidError::Config(_))));
+
+        let mut c = base.clone();
+        c.connect_timeout_secs = 0;
+        assert!(matches!(c.validate(), Err(DruidError::Config(_))));
+
+        // 边界：恰好等于 max_active 合法
+        let mut c = base.clone();
+        c.initial_size = c.max_active;
+        c.min_idle = c.max_active;
+        assert!(c.validate().is_ok());
+
+        // KeepAlive 间隔 0 会让后台循环 sleep(0) 空转并每轮打库
+        let mut c = base.clone();
+        c.keep_alive = true;
+        c.keep_alive_between_time_ms = 0;
+        assert!(matches!(c.validate(), Err(DruidError::Config(_))));
+        // 关闭 KeepAlive 或给出正间隔则合法（驱逐间隔 0 = 禁用循环，不是缺陷）
+        let mut c = base.clone();
+        c.time_between_eviction_runs_ms = 0;
+        c.keep_alive = true;
+        c.keep_alive_between_time_ms = 1;
+        assert!(c.validate().is_ok());
+    }
+
+    #[test]
+    fn test_debug_masks_unmodeled_shapes() {
+        // 未建模键名、嵌套 URL 值、编码冒号的口令：旧黑名单实现全部漏出
+        let mut cfg = DruidConfig::new("jdbc:mysql://root%3As3cret@h/db?credential=s3cret", "", "");
+        cfg.connection_properties = vec!["jdbcUrl=jdbc:mysql://u:s3cret@h2/db".into()];
+        let dbg = format!("{:?}", cfg);
+        assert!(!dbg.contains("s3cret"), "{dbg}");
+        // 未建模键名不回显（键位置可能就是口令），值里的 URL 仍脱敏后保留便于排障
+        assert!(!dbg.contains("jdbcUrl="), "{dbg}");
+        assert!(dbg.contains("***=jdbc:mysql://u:***@h2/db"), "{dbg}");
     }
 
     // serde 序列化/反序列化测试见 druid-console 中的跨 crate 测试

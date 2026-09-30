@@ -28,33 +28,39 @@ impl WallProvider {
             self.hit_count += 1;
             return r.clone();
         }
+        let result = self.check_uncached(sql);
+        self.cache_insert(sql, result.clone());
+        result
+    }
+
+    /// 未命中缓存时的完整检查：纯文本预检 → 解析 → AST 检查。
+    /// fail-closed：任何一步不能通过都拒绝，不再"只告警然后放行"。
+    fn check_uncached(&self, sql: &str) -> WallCheckResult {
+        // 长度上限与纯文本黑名单前置：解析之前就能拒绝
         let quick = self.checker.quick_check(sql);
-        let mut ast_deny: Option<WallCheckResult> = None;
-        if let Ok(stmts) = druid_sql::parse_sql(sql) {
-            for s in &stmts {
-                let x = self.checker.check(sql, s);
-                if !x.allowed {
-                    ast_deny = Some(x);
-                    break;
-                }
-            }
-        } else {
-            let preview: String = sql.chars().take(200).collect();
-            tracing::warn!("Wall AST check skipped: SQL parse failed for '{}'", preview);
-        }
-        if let Some(deny) = ast_deny {
-            self.cache_insert(sql, deny.clone());
-            return deny;
-        }
         if !quick.allowed {
-            tracing::warn!(
-                "Wall quick_check denied but AST check passed (possible false positive): '{}'",
-                sql.chars().take(200).collect::<String>()
-            );
+            return quick;
         }
-        let pass = WallCheckResult::pass();
-        self.cache_insert(sql, pass.clone());
-        pass
+        match druid_sql::parse_sql(sql) {
+            Ok(stmts) => {
+                let r = self.checker.check_statement_count(stmts.len());
+                if !r.allowed {
+                    return r;
+                }
+                for s in &stmts {
+                    let x = self.checker.check(sql, s);
+                    if !x.allowed {
+                        return x;
+                    }
+                }
+                WallCheckResult::pass()
+            }
+            Err(e) => {
+                let preview: String = sql.chars().take(200).collect();
+                tracing::warn!("Wall parse failed for '{}': {}", preview, e);
+                self.checker.check_unparsable(sql, &e)
+            }
+        }
     }
 
     fn cache_insert(&mut self, sql: &str, result: WallCheckResult) {
@@ -127,11 +133,14 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_failure_is_cached_as_pass() {
-        // 无法解析的 SQL：AST 检查跳过，但结果仍被缓存
+    fn test_parse_failure_is_denied_and_cached() {
+        // 无法解析的 SQL：fail-closed 拒绝，且拒绝结果同样进缓存
         let mut p = provider(100);
-        assert!(p.check("NOT VALID SQL !!!").allowed);
-        assert!(p.check("NOT VALID SQL !!!").allowed);
+        let r = p.check("NOT VALID SQL !!!");
+        assert!(!r.allowed);
+        assert!(r.violations[0].message.contains("unparseable"));
+        let r = p.check("NOT VALID SQL !!!"); // 缓存命中
+        assert!(!r.allowed);
         assert_eq!(p.hit_count, 1);
     }
 

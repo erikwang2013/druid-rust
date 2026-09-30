@@ -10,6 +10,8 @@ pub enum SQLExpr {
     NumberLiteral(String),
     /// NULL
     Null,
+    /// MySQL 变量引用: @user_var / @@system_var（含 @@GLOBAL.name）
+    Variable(String),
     /// 占位符 ?
     Placeholder,
     /// 二元运算: left op right

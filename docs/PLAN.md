@@ -194,7 +194,7 @@ druid-rust/
 - [x] 核心方言 parser（MySQL、PostgreSQL、Oracle → 其他 27 种）
 - [x] SchemaStatVisitor（表名/列名提取）
 - [x] SQL 格式化/改写工具
-- [x] 属性测试（proptest）：随机 SQL → 解析 → 格式化 → 重新解析一致性
+- [ ] 属性测试（proptest）：随机 SQL → 解析 → 格式化 → 重新解析一致性（**未实现**：仓库无 proptest 依赖）
 
 ### 第 3 阶段：Filter 架构（druid-filter）
 **目标**：可插拔的 Filter-Chain 责任链
@@ -219,7 +219,7 @@ druid-rust/
 - [x] 连接生命周期管理（创建、借用、归还、销毁）
 - [x] 异步驱逐线程（`tokio::spawn` 定时任务）
 - [x] KeepAlive 机制
-- [x] PSCache（PreparedStatement 缓存）
+- [x] PSCache（PreparedStatement 缓存）— 容器与单测已就绪；**尚未接入借用路径**，开关当前无实际效果（见 `datasource.rs::pscache()` 注释）
 - [x] 连接有效性验证
 - [x] 连接预热（initialSize）
 
@@ -230,8 +230,8 @@ druid-rust/
 - [x] SQL 执行时间统计
 - [x] 慢 SQL 检测
 - [x] 连接池指标（活跃/空闲/等待连接数）
-- [x] Prometheus 指标导出
-- [x] `druid-console` Web 监控页面（axum + askama）
+- [ ] Prometheus 指标导出（**未实现**：无 prometheus 依赖；`PoolMetrics` 为自研原子计数器，控制台以 JSON 端点导出）
+- [x] `druid-console` Web 监控页面（axum；页面为内联 HTML，未使用 askama）
 
 ### 第 7 阶段：代理层 + 高可用
 **目标**：数据库驱动代理和高可用数据源
@@ -276,6 +276,10 @@ druid-rust/
 
 ## 八、依赖项
 
+> 注：以下为规划期的依赖草案，与当前 `Cargo.toml` 不完全一致——`sqlx`、`tracing-subscriber`、
+> `rand` 已于 1.1.9 移除（未使用），另新增 `aes`/`aes-gcm`/`zeroize`（crypto）。实际清单以
+> 根 [Cargo.toml](../Cargo.toml) 为准。
+
 ```toml
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -319,7 +323,7 @@ druid-core ───────────────────────
 ---
 
 **创建日期**: 2026-07-31
-**状态**: 全部阶段已完成（规划完成于 v1.0.8；当前发布版本 **v1.2.0**）
+**状态**: 全部阶段已完成（规划完成于 v1.0.8；当前发布版本 **v1.3.0**，1.3.0 为深度审查 + 对抗验证后的修复版，见 [CHANGELOG.md](../CHANGELOG.md)）
 **审查报告**: [REVIEW_REPORT.md](REVIEW_REPORT.md)
 **测试报告**: [TEST_REPORT.md](TEST_REPORT.md)
 **基于**: alibaba/druid v1.2.24, coding-to-rust/java-to-rust v2026-07-30

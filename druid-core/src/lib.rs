@@ -4,6 +4,7 @@
 
 pub mod config;
 pub mod error;
+pub(crate) mod redact;
 pub mod types;
 
 pub use config::DruidConfig;

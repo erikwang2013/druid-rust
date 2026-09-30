@@ -1,10 +1,35 @@
+//! Druid-Rust 监控统计
+//!
+//! - [`StatFilter`]：实现 `Filter` trait，采集 SQL 耗时/行数/错误与连接池生命周期事件；
+//! - [`SqlStat`] / [`DataSourceStat`]：SQL 级与数据源级聚合统计；
+//! - [`metrics::PoolMetrics`]：连接池运行时指标（lock-free）。
+//!
+//! # active/idle 计数
+//!
+//! `StatFilter` 自身按生命周期事件维护 active/idle 计数，并区分「借出中的连接被关闭」
+//! 与「空闲连接被关闭」两种情况。若通过 [`StatFilter::bind_metrics`] 绑定了池的
+//! [`metrics::PoolMetrics`]，[`StatFilter::get_datasource_stat`] 的 active/idle
+//! 直接读取池内权威计数，单一数据源，不会再漂移。
+
+#![warn(missing_docs)]
+
 pub mod metrics;
 
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use druid_core::DruidError;
 use druid_filter::{Filter, FilterContext};
+use druid_util::string::truncate_sql;
+
+use crate::metrics::PoolMetrics;
+
+/// SQL 展示文本最大长度（按字符边界安全截断，超出追加 `...`）
+const MAX_SQL_DISPLAY_LEN: usize = 200;
+/// 慢 SQL 日志中 SQL 的最大长度
+const MAX_SQL_LOG_LEN: usize = 500;
+/// SQL 统计表默认容量上限
+const DEFAULT_MAX_SQL_SIZE: usize = 1000;
 
 /// 单条 SQL 的执行统计
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -28,7 +53,7 @@ pub struct SqlStat {
 impl SqlStat {
     fn new(sql: &str) -> Self {
         SqlStat {
-            sql: sql.chars().take(200).collect(),
+            sql: truncate_sql(sql, MAX_SQL_DISPLAY_LEN),
             ..Default::default()
         }
     }
@@ -53,34 +78,77 @@ pub struct DataSourceStat {
     pub execute_count: u64,
     /// SQL 错误次数
     pub error_count: u64,
-    /// 当前活跃连接
+    /// 当前活跃连接（绑定 PoolMetrics 后取自池内权威计数）
     pub active_count: usize,
-    /// 当前空闲连接
+    /// 当前空闲连接（绑定 PoolMetrics 后取自池内权威计数）
     pub idle_count: usize,
+}
+
+/// 取得（必要时创建）SQL 统计条目；表满时先按 `total_time_ms` 淘汰最小项
+///
+/// 仅在新 key 且已满时做一次 O(n) 扫描，命中已有 key 的热路径无额外开销。
+fn upsert_sql_stat<'a>(
+    stats: &'a mut HashMap<String, SqlStat>,
+    sql: &str,
+    max_size: usize,
+) -> &'a mut SqlStat {
+    if max_size > 0 && !stats.contains_key(sql) && stats.len() >= max_size {
+        if let Some(min_key) = stats
+            .iter()
+            .min_by_key(|(_, v)| v.total_time_ms)
+            .map(|(k, _)| k.clone())
+        {
+            stats.remove(&min_key);
+        }
+    }
+    stats
+        .entry(sql.to_string())
+        .or_insert_with(|| SqlStat::new(sql))
 }
 
 /// StatFilter — SQL 监控统计 Filter
 ///
 /// 实现 Filter trait，实时采集 SQL 执行统计和连接池指标。
+/// SQL 统计表有容量上限（默认 1000），防止 ORM 动态 SQL 撑爆常驻内存。
 pub struct StatFilter {
-    #[allow(dead_code)]
-    name: String,
     sql_stats: Mutex<HashMap<String, SqlStat>>,
     ds_stat: Mutex<DataSourceStat>,
+    /// 当前处于借出状态的连接 ID，用于区分连接关闭时该减 active 还是 idle
+    borrowed: Mutex<HashSet<u64>>,
     slow_sql_ms: u64,
+    max_sql_size: usize,
+    bound_metrics: OnceLock<Arc<PoolMetrics>>,
 }
 
 impl StatFilter {
+    /// 创建统计 Filter，`slow_sql_ms` 为慢 SQL 阈值（ms）
     pub fn new(name: &str, slow_sql_ms: u64) -> Self {
         StatFilter {
-            name: name.to_string(),
             sql_stats: Mutex::new(HashMap::new()),
             ds_stat: Mutex::new(DataSourceStat {
                 name: name.to_string(),
                 ..Default::default()
             }),
+            borrowed: Mutex::new(HashSet::new()),
             slow_sql_ms,
+            max_sql_size: DEFAULT_MAX_SQL_SIZE,
+            bound_metrics: OnceLock::new(),
         }
+    }
+
+    /// 设置 SQL 统计表容量上限（默认 1000；0 表示不限制）
+    ///
+    /// 超限后插入新 SQL 时淘汰 `total_time_ms` 最小的一条（对应 Java Druid 的 `maxSqlSize`）。
+    pub fn with_max_sql_size(mut self, max: usize) -> Self {
+        self.max_sql_size = max;
+        self
+    }
+
+    /// 绑定连接池指标，绑定后 [`Self::get_datasource_stat`] 的 active/idle 取自池内权威计数
+    ///
+    /// 返回 `false` 表示此前已绑定（保留首次绑定，不做替换）。
+    pub fn bind_metrics(&self, metrics: Arc<PoolMetrics>) -> bool {
+        self.bound_metrics.set(metrics).is_ok()
     }
 
     /// 获取所有 SQL 统计（按总耗时降序排列）
@@ -96,17 +164,30 @@ impl StatFilter {
         stats
     }
 
-    /// 获取慢 SQL 列表
-    pub fn get_slow_sql(&self) -> Vec<SqlStat> {
-        self.get_sql_stats()
-            .into_iter()
+    /// 从已有统计切片中筛选慢 SQL（复用已取到的结果，避免重复加锁/克隆）
+    pub fn get_slow_sql_from(&self, stats: &[SqlStat]) -> Vec<SqlStat> {
+        stats
+            .iter()
             .filter(|s| s.max_time_ms >= self.slow_sql_ms)
+            .cloned()
             .collect()
     }
 
+    /// 获取慢 SQL 列表
+    pub fn get_slow_sql(&self) -> Vec<SqlStat> {
+        self.get_slow_sql_from(&self.get_sql_stats())
+    }
+
     /// 获取数据源级别统计
+    ///
+    /// 已绑定 [`PoolMetrics`] 时 active/idle 以池内计数为准。
     pub fn get_datasource_stat(&self) -> DataSourceStat {
-        self.ds_stat.lock().expect("stat lock poisoned").clone()
+        let mut stat = self.ds_stat.lock().expect("stat lock poisoned").clone();
+        if let Some(m) = self.bound_metrics.get() {
+            stat.active_count = m.active() as usize;
+            stat.idle_count = m.idle() as usize;
+        }
+        stat
     }
 
     /// 获取总执行次数
@@ -134,7 +215,10 @@ impl Filter for StatFilter {
         stat.idle_count += 1;
     }
 
-    fn connection_borrowed(&self, _ctx: &FilterContext, wait_ms: u64) {
+    fn connection_borrowed(&self, ctx: &FilterContext, wait_ms: u64) {
+        if let Some(id) = ctx.connection_id {
+            self.borrowed.lock().expect("stat lock poisoned").insert(id);
+        }
         let mut stat = self.ds_stat.lock().expect("stat lock poisoned");
         stat.borrow_count += 1;
         stat.total_wait_time_ms += wait_ms;
@@ -142,20 +226,36 @@ impl Filter for StatFilter {
         stat.idle_count = stat.idle_count.saturating_sub(1);
     }
 
-    fn connection_returned(&self, _ctx: &FilterContext) {
+    fn connection_returned(&self, ctx: &FilterContext) {
+        if let Some(id) = ctx.connection_id {
+            self.borrowed
+                .lock()
+                .expect("stat lock poisoned")
+                .remove(&id);
+        }
         let mut stat = self.ds_stat.lock().expect("stat lock poisoned");
         stat.return_count += 1;
         stat.active_count = stat.active_count.saturating_sub(1);
         stat.idle_count += 1;
     }
 
-    fn connection_closed(&self, _ctx: &FilterContext) {
+    fn connection_closed(&self, ctx: &FilterContext) {
+        // 借出中的连接关闭（test_on_borrow 校验失败、池关闭时未归还的连接）→ 减 active；
+        // 空闲连接关闭（驱逐/keepalive/过期）→ 减 idle。
+        // 带 connection_id 时按借出集合精确区分；不带 id 时无法区分，按空闲处理。
+        let was_borrowed = ctx.connection_id.is_some_and(|id| {
+            self.borrowed
+                .lock()
+                .expect("stat lock poisoned")
+                .remove(&id)
+        });
         let mut stat = self.ds_stat.lock().expect("stat lock poisoned");
         stat.destroy_count += 1;
-        // 大多数 close 发生在 idle 连接上（驱逐/keepalive/过期），仅递减 idle_count。
-        // 少数 active 连接关闭时 idle_count 多减一次，但有 saturating_sub 防 underflow。
-        // 精确 active/idle 计数参见 PoolMetrics。
-        stat.idle_count = stat.idle_count.saturating_sub(1);
+        if was_borrowed {
+            stat.active_count = stat.active_count.saturating_sub(1);
+        } else {
+            stat.idle_count = stat.idle_count.saturating_sub(1);
+        }
     }
 
     fn statement_execute_before(&self, _ctx: &FilterContext) -> Result<(), DruidError> {
@@ -166,24 +266,23 @@ impl Filter for StatFilter {
 
     fn statement_execute_after(&self, ctx: &FilterContext, elapsed_ms: u64, rows: u64) {
         let sql = ctx.sql.as_deref().unwrap_or("UNKNOWN");
-        let mut stats = self.sql_stats.lock().expect("stat lock poisoned");
-        let entry = if let Some(e) = stats.get_mut(sql) {
-            e
-        } else {
-            stats
-                .entry(sql.to_string())
-                .or_insert_with(|| SqlStat::new(sql))
-        };
-        entry.execute_count += 1;
-        entry.total_time_ms += elapsed_ms;
-        entry.max_time_ms = entry.max_time_ms.max(elapsed_ms);
-        entry.rows_read += rows;
-        entry.last_execute_time =
-            Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
-
-        // 慢 SQL 日志
+        {
+            let mut stats = self.sql_stats.lock().expect("stat lock poisoned");
+            let entry = upsert_sql_stat(&mut stats, sql, self.max_sql_size);
+            entry.execute_count += 1;
+            entry.total_time_ms += elapsed_ms;
+            entry.max_time_ms = entry.max_time_ms.max(elapsed_ms);
+            entry.rows_read += rows;
+            entry.last_execute_time =
+                Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
+        }
+        // 慢 SQL 日志在锁外打印：WARN 可能阻塞在文件/网络 sink 上，不能拖住全局统计锁
         if elapsed_ms >= self.slow_sql_ms {
-            tracing::warn!("SLOW SQL [{}ms]: {}", elapsed_ms, sql);
+            tracing::warn!(
+                "SLOW SQL [{}ms]: {}",
+                elapsed_ms,
+                truncate_sql(sql, MAX_SQL_LOG_LEN)
+            );
         }
     }
 
@@ -192,151 +291,11 @@ impl Filter for StatFilter {
         if let Some(sql) = &ctx.sql {
             let mut stats = self.sql_stats.lock().expect("stat lock poisoned");
             // 从未成功执行过的 SQL 也需记录错误数，缺条目时创建
-            let entry = if let Some(e) = stats.get_mut(sql.as_str()) {
-                e
-            } else {
-                stats
-                    .entry(sql.clone())
-                    .or_insert_with(|| SqlStat::new(sql))
-            };
+            let entry = upsert_sql_stat(&mut stats, sql, self.max_sql_size);
             entry.error_count += 1;
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_stat_collection() {
-        let filter = StatFilter::new("test-ds", 1000);
-        let ctx = FilterContext::new("test").with_sql("SELECT 1");
-
-        filter.statement_execute_before(&ctx).unwrap();
-        filter.statement_execute_after(&ctx, 50, 1);
-        filter.statement_execute_before(&ctx).unwrap();
-        filter.statement_execute_after(&ctx, 200, 10);
-
-        let stats = filter.get_sql_stats();
-        assert_eq!(stats.len(), 1);
-        assert_eq!(stats[0].execute_count, 2);
-        assert_eq!(stats[0].max_time_ms, 200);
-    }
-
-    #[test]
-    fn test_slow_sql_detection() {
-        let filter = StatFilter::new("test-ds", 100);
-        let ctx = FilterContext::new("test").with_sql("SELECT SLEEP(1)");
-        filter.statement_execute_before(&ctx).unwrap();
-        filter.statement_execute_after(&ctx, 500, 0);
-
-        let slow = filter.get_slow_sql();
-        assert_eq!(slow.len(), 1);
-    }
-
-    #[test]
-    fn test_datasource_stat() {
-        let filter = StatFilter::new("ds1", 1000);
-        filter.connection_created(&FilterContext::new("ds1"));
-        filter.connection_borrowed(&FilterContext::new("ds1"), 10);
-
-        let stat = filter.get_datasource_stat();
-        assert_eq!(stat.create_count, 1);
-        assert_eq!(stat.borrow_count, 1);
-    }
-
-    #[test]
-    fn test_sql_truncated_to_200_chars() {
-        let filter = StatFilter::new("ds", 1000);
-        let long_sql = "x".repeat(300);
-        filter.statement_execute_after(&FilterContext::new("ds").with_sql(&long_sql), 5, 0);
-        let stats = filter.get_sql_stats();
-        assert_eq!(stats.len(), 1);
-        assert_eq!(stats[0].sql.len(), 200);
-    }
-
-    #[test]
-    fn test_sql_stats_sorted_by_total_time_desc() {
-        let filter = StatFilter::new("ds", 1000);
-        filter.statement_execute_after(&FilterContext::new("ds").with_sql("SLOW"), 500, 0);
-        filter.statement_execute_after(&FilterContext::new("ds").with_sql("FAST"), 10, 0);
-        filter.statement_execute_after(&FilterContext::new("ds").with_sql("SLOW"), 100, 0);
-
-        let stats = filter.get_sql_stats();
-        assert_eq!(stats.len(), 2);
-        assert_eq!(stats[0].sql, "SLOW"); // 总耗时 600 > 10
-        assert_eq!(stats[0].total_time_ms, 600);
-        assert_eq!(stats[0].max_time_ms, 500);
-        assert_eq!(stats[1].sql, "FAST");
-    }
-
-    #[test]
-    fn test_rows_read_accumulates() {
-        let filter = StatFilter::new("ds", 1000);
-        let ctx = FilterContext::new("ds").with_sql("SELECT");
-        filter.statement_execute_after(&ctx, 1, 100);
-        filter.statement_execute_after(&ctx, 1, 50);
-        let stats = filter.get_sql_stats();
-        assert_eq!(stats[0].rows_read, 150);
-        assert_eq!(stats[0].execute_count, 2);
-    }
-
-    #[test]
-    fn test_statement_error_counting() {
-        let filter = StatFilter::new("ds", 1000);
-        let ctx = FilterContext::new("ds").with_sql("BAD SQL");
-        let err = DruidError::SqlParse("syntax".into());
-        filter.statement_error(&ctx, &err);
-        filter.statement_error(&ctx, &err);
-
-        let ds_stat = filter.get_datasource_stat();
-        assert_eq!(ds_stat.error_count, 2);
-        let stats = filter.get_sql_stats();
-        assert_eq!(stats[0].error_count, 2);
-    }
-
-    #[test]
-    fn test_slow_sql_boundary_inclusive() {
-        let filter = StatFilter::new("ds", 100);
-        let ctx = FilterContext::new("ds").with_sql("BOUNDARY");
-        filter.statement_execute_after(&ctx, 100, 0); // 恰好等于阈值
-        assert_eq!(filter.get_slow_sql().len(), 1);
-
-        filter.statement_execute_after(&ctx, 99, 0);
-        assert_eq!(filter.get_slow_sql().len(), 1); // 只有一条达到阈值
-    }
-
-    #[test]
-    fn test_unknown_sql_default_name() {
-        let filter = StatFilter::new("ds", 1000);
-        filter.statement_execute_after(&FilterContext::new("ds"), 5, 0); // 无 SQL
-        let stats = filter.get_sql_stats();
-        assert_eq!(stats.len(), 1);
-        assert_eq!(stats[0].sql, "UNKNOWN");
-    }
-
-    #[test]
-    fn test_datasource_stat_full_connection_lifecycle() {
-        let filter = StatFilter::new("ds", 1000);
-        filter.connection_created(&FilterContext::new("ds"));
-        filter.connection_borrowed(&FilterContext::new("ds"), 15);
-        filter.connection_returned(&FilterContext::new("ds"));
-        filter.connection_closed(&FilterContext::new("ds"));
-
-        let stat = filter.get_datasource_stat();
-        assert_eq!(stat.create_count, 1);
-        assert_eq!(stat.borrow_count, 1);
-        assert_eq!(stat.return_count, 1);
-        assert_eq!(stat.destroy_count, 1);
-        assert_eq!(stat.total_wait_time_ms, 15);
-        // created(+1) → borrowed(-1) → returned(+1) → closed(-1) = 0
-        assert_eq!(stat.idle_count, 0);
-        assert_eq!(filter.execute_count(), 0);
-
-        filter
-            .statement_execute_before(&FilterContext::new("ds"))
-            .unwrap();
-        assert_eq!(filter.execute_count(), 1);
-    }
-}
+mod tests;
