@@ -32,7 +32,8 @@ jobs:
           # gh release create 经 API 建 tag，不依赖本地 git 身份
           # （runner 已不再预置 user.name / user.email，本地 git tag -a 会以
           #  "empty ident name" 失败）
+          # 版本名严格等于 tag（vx.y.z），不加任何前后缀
           gh release create "$TAG" \
             --target "$GITHUB_SHA" \
             --generate-notes \
-            --title "Druid Rust $TAG"
+            --title "$TAG"
