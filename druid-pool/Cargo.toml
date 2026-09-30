@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+readme = "../README.md"
 description = "Async connection pool for Druid-Rust — semaphore-based, eviction, KeepAlive, PSCache"
 keywords = ["druid", "connection-pool", "database", "async"]
 categories = ["database"]

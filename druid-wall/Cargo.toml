@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+readme = "../README.md"
 description = "SQL firewall for Druid-Rust — AST-level security checks, deny functions/operations"
 keywords = ["druid", "sql", "firewall", "security"]
 categories = ["database"]

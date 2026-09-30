@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+readme = "../README.md"
 description = "SQL parser and AST for Druid-Rust — lexer, parser, formatter, schema visitor"
 keywords = ["druid", "sql", "parser", "ast"]
 categories = ["parsing"]

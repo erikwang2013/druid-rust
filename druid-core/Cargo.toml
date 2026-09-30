@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+readme = "../README.md"
 description = "Core types and config for Druid-Rust — DruidConfig, DruidError, DbType"
 keywords = ["druid", "database", "connection-pool"]
 categories = ["database"]

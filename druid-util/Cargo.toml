@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+readme = "../README.md"
 description = "Utility library for Druid-Rust — SQL detection, string helpers, crypto, time"
 keywords = ["druid", "sql", "utility", "crypto"]
 categories = ["development-tools"]

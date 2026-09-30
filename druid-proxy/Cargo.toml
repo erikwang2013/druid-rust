@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+readme = "../README.md"
 description = "Database proxy layer for Druid-Rust — Filter-aware connection/statement wrappers"
 keywords = ["druid", "proxy", "database"]
 categories = ["database"]
