@@ -6,7 +6,7 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 description = "Filter chain architecture for Druid-Rust — pluggable lifecycle hooks"
-keywords = ["druid", "filter", "chain-of-responsibility"]
+keywords = ["druid", "filter", "filter-chain", "interceptor"]
 categories = ["development-tools"]
 
 [dependencies]
