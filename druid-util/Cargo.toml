@@ -10,7 +10,7 @@ keywords = ["druid", "sql", "utility", "crypto"]
 categories = ["development-tools"]
 
 [dependencies]
-druid-core = { path = "../druid-core" }
+druid-core.workspace = true
 chrono.workspace = true
 serde.workspace = true
 aes-gcm.workspace = true

@@ -9,7 +9,7 @@ description = "Database proxy layer for Druid-Rust — Filter-aware connection/s
 keywords = ["druid", "proxy", "database"]
 categories = ["database"]
 [dependencies]
-druid-core = { path = "../druid-core" }
-druid-filter = { path = "../druid-filter" }
+druid-core.workspace = true
+druid-filter.workspace = true
 tracing.workspace = true
 thiserror.workspace = true

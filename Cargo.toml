@@ -19,10 +19,22 @@ members = [
 version = "1.2.0"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/alibaba/druid-rust"
+repository = "https://github.com/erikwang2013/druid-rust"
 authors = ["erik"]
 
 [workspace.dependencies]
+# 内部 crate —— path 供本地开发，version 供 crates.io 发布
+druid-core = { version = "1.2.0", path = "druid-core" }
+druid-util = { version = "1.2.0", path = "druid-util" }
+druid-sql = { version = "1.2.0", path = "druid-sql" }
+druid-filter = { version = "1.2.0", path = "druid-filter" }
+druid-wall = { version = "1.2.0", path = "druid-wall" }
+druid-pool = { version = "1.2.0", path = "druid-pool" }
+druid-stat = { version = "1.2.0", path = "druid-stat" }
+druid-proxy = { version = "1.2.0", path = "druid-proxy" }
+druid-ha = { version = "1.2.0", path = "druid-ha" }
+druid-console = { version = "1.2.0", path = "druid-console" }
+
 # 异步运行时
 tokio = { version = "1", features = ["full"] }
 

@@ -10,8 +10,8 @@ keywords = ["druid", "monitoring", "web", "dashboard"]
 categories = ["web-programming"]
 
 [dependencies]
-druid-core = { path = "../druid-core" }
-druid-stat = { path = "../druid-stat" }
+druid-core.workspace = true
+druid-stat.workspace = true
 axum = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 serde.workspace = true

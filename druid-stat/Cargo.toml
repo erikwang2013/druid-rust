@@ -10,8 +10,8 @@ keywords = ["druid", "monitoring", "metrics", "sql"]
 categories = ["development-tools"]
 
 [dependencies]
-druid-core = { path = "../druid-core" }
-druid-filter = { path = "../druid-filter" }
+druid-core.workspace = true
+druid-filter.workspace = true
 tracing.workspace = true
 serde.workspace = true
 chrono.workspace = true

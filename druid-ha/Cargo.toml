@@ -9,8 +9,8 @@ description = "High-availability data source for Druid-Rust — weighted round-r
 keywords = ["druid", "high-availability", "load-balancing"]
 categories = ["database"]
 [dependencies]
-druid-core = { path = "../druid-core" }
-druid-pool = { path = "../druid-pool" }
+druid-core.workspace = true
+druid-pool.workspace = true
 tokio = { workspace = true, features = ["sync", "time", "rt"] }
 tracing.workspace = true
 thiserror.workspace = true

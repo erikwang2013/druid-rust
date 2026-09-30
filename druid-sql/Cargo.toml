@@ -10,7 +10,7 @@ keywords = ["druid", "sql", "parser", "ast"]
 categories = ["parsing"]
 
 [dependencies]
-druid-core = { path = "../druid-core" }
+druid-core.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

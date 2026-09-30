@@ -10,5 +10,5 @@ keywords = ["druid", "filter", "chain-of-responsibility"]
 categories = ["development-tools"]
 
 [dependencies]
-druid-core = { path = "../druid-core" }
+druid-core.workspace = true
 tracing.workspace = true

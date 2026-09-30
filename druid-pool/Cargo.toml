@@ -10,9 +10,9 @@ keywords = ["druid", "connection-pool", "database", "async"]
 categories = ["database"]
 
 [dependencies]
-druid-core = { path = "../druid-core" }
-druid-filter = { path = "../druid-filter" }
-druid-stat = { path = "../druid-stat" }
+druid-core.workspace = true
+druid-filter.workspace = true
+druid-stat.workspace = true
 tokio = { workspace = true, features = ["sync", "time", "rt"] }
 tracing.workspace = true
 async-trait.workspace = true

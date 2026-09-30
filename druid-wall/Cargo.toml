@@ -9,9 +9,9 @@ description = "SQL firewall for Druid-Rust — AST-level security checks, deny f
 keywords = ["druid", "sql", "firewall", "security"]
 categories = ["database"]
 [dependencies]
-druid-core = { path = "../druid-core" }
-druid-sql = { path = "../druid-sql" }
-druid-filter = { path = "../druid-filter" }
+druid-core.workspace = true
+druid-sql.workspace = true
+druid-filter.workspace = true
 serde.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
