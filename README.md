@@ -21,6 +21,8 @@
 
 小德也出现在 Web 控制台页头：`druid-console` 通过 `include_str!` 内联同一份
 [`docs/assets/mascot.svg`](docs/assets/mascot.svg)，并注册为 `/druid/mascot.svg` 与站点 favicon。
+控制台会根据当前状态自动切换 12 种表情形态（SQL 错误→愤怒、慢 SQL→沮丧、池用满→敲打、
+尚无执行→卖萌、正常→微笑），全部形态可通过 `/druid/pet/<name>.svg` 访问。
 
 
 ## 项目宠物表情形态 · 小德
@@ -159,6 +161,7 @@ druid-rust/
 │   │   ├── architecture.svg           #   架构设计图
 │   │   ├── features.svg               #   功能设计图
 │   │   └── lifecycle.svg              #   连接生命周期图
+│   ├── pet-expressions/               #   12 种表情形态 SVG（README 用）
 │   ├── PLAN.md                        # 重构规划文档
 │   ├── README_EN.md                   # 英文文档
 │   ├── TEST_REPORT.md                 # 测试报告
@@ -230,12 +233,14 @@ druid-rust/
 │        • mark_down/mark_up 手动切换
 │
 └── druid-console/                     # ── 层 6: 控制台 ──
+    ├── assets/                        #   宠物资产（mascot.svg + pet-expressions/）
     └── src/lib.rs
          • /druid/stat.json
          • /druid/sql.json
          • /druid/slow-sql.json
-         • /druid/index.html (监控页面，页头内联「小德」)
+         • /druid/index.html (监控页面，页头按状态内联「小德」表情)
          • /druid/mascot.svg (项目宠物，同时作为 favicon)
+         • /druid/pet/<name>.svg (12 种表情形态)
 ```
 
 ### Crate 依赖关系
