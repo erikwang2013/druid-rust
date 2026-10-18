@@ -1,7 +1,7 @@
 # Druid-Rust
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-428%20passed-green)]()
+[![Tests](https://img.shields.io/badge/tests-431%20passed-green)]()
 
 ![Druid-Rust mascot — the Druid Owl](assets/mascot.svg)
 
@@ -344,6 +344,10 @@ tokio::spawn(async {
 // Requests must carry: Authorization: Bearer my-secret
 ```
 
+> With a token configured, data and page endpoints (`/druid/*.json`, `/druid/index.html`)
+> require authentication. Static pet assets (`/druid/mascot.svg`, `/druid/pet/<name>.svg`)
+> stay public so browsers can load the favicon; they contain no SQL or statistics data.
+
 ### High Availability
 
 ```rust
@@ -458,7 +462,7 @@ Key differences from Java:
 cargo check --workspace          # Quick compile check
 cargo clippy --all-targets       # Lint check (current: 0 warnings)
 cargo fmt --all                  # Format
-cargo test --workspace           # 428 passed; 0 failed
+cargo test --workspace           # 431 passed; 0 failed
 ```
 
 ### Benchmarks
@@ -480,14 +484,14 @@ cargo run --example basic
 | druid-core | 49 |
 | druid-util | 57 |
 | druid-sql | 86 |
-| druid-wall | 62 |
+| druid-wall | 63 |
 | druid-pool | 83 |
 | druid-filter | 20 |
 | druid-console | 28 |
 | druid-stat | 22 |
 | druid-ha | 12 |
-| druid-proxy | 9 |
-| **Total** | **428** |
+| druid-proxy | 11 |
+| **Total** | **431** |
 
 ## Review Report
 
@@ -495,7 +499,7 @@ Latest code review: [REVIEW_REPORT.md](REVIEW_REPORT.md)
 
 - `cargo check`: ✅ Zero warnings
 - `cargo clippy --all-targets`: ✅ Zero warnings
-- `cargo test`: ✅ 428/428 passed
+- `cargo test`: ✅ 431/431 passed
 - `cargo fmt --check`: ✅ Consistent formatting
 
 ## License

@@ -7,6 +7,7 @@
 
 use druid_core::DruidError;
 use druid_filter::FilterChain;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// 代理连接 — 包装真实连接，Filter 回调自动触发
@@ -22,6 +23,8 @@ pub struct ProxyConnection {
 pub struct ProxyStatement {
     conn: Arc<ProxyConnection>,
     filter_chain: Arc<FilterChain>,
+    /// 语句序号：与 conn_id 拼成全局唯一 statement id
+    stmt_seq: AtomicU64,
 }
 
 /// 原始连接 trait
@@ -54,6 +57,7 @@ impl ProxyConnection {
         ProxyStatement {
             conn: self.clone(),
             filter_chain: self.filter_chain.clone(),
+            stmt_seq: AtomicU64::new(1),
         }
     }
 
@@ -81,16 +85,38 @@ impl ProxyConnection {
 
 impl ProxyStatement {
     /// 执行 SQL（带 Filter 拦截）
+    ///
+    /// 钩子顺序与 `druid-pool::PoolGuard::execute` 保持一致：
+    /// `statement_created` → `statement_execute_before` → 执行 → `statement_execute_after`
+    /// / `statement_error` → `statement_closed`。
     pub fn execute(&self, sql: &str) -> Result<u64, DruidError> {
-        self.filter_chain
-            .statement_execute_before(sql, self.conn.conn_id)?;
-        let start = std::time::Instant::now();
-        let result = self.conn.inner.execute(sql);
-        let elapsed = start.elapsed().as_millis() as u64;
-        if let Ok(rows) = &result {
-            self.filter_chain
-                .statement_execute_after(sql, self.conn.conn_id, elapsed, *rows);
-        }
+        let stmt_id = (self.conn.conn_id << 32) | self.stmt_seq.fetch_add(1, Ordering::SeqCst);
+        self.filter_chain.statement_created(sql, stmt_id);
+
+        let result = match self.filter_chain.statement_execute_before(sql, stmt_id) {
+            Ok(()) => {
+                let start = std::time::Instant::now();
+                match self.conn.inner.execute(sql) {
+                    Ok(rows) => {
+                        let elapsed = start.elapsed().as_millis() as u64;
+                        self.filter_chain
+                            .statement_execute_after(sql, stmt_id, elapsed, rows);
+                        Ok(rows)
+                    }
+                    Err(e) => {
+                        self.filter_chain.statement_error(sql, stmt_id, &e);
+                        Err(e)
+                    }
+                }
+            }
+            Err(e) => {
+                // 被 Filter 拦截（如防火墙）：同样走错误钩子，统计不会漏记
+                self.filter_chain.statement_error(sql, stmt_id, &e);
+                Err(e)
+            }
+        };
+
+        self.filter_chain.statement_closed(sql, stmt_id);
         result
     }
 }
@@ -209,6 +235,9 @@ mod tests {
         closed: AtomicU64,
         before: AtomicU64,
         after: AtomicU64,
+        stmt_created: AtomicU64,
+        stmt_closed: AtomicU64,
+        stmt_error: AtomicU64,
     }
 
     struct CountingFilter {
@@ -234,6 +263,15 @@ mod tests {
         }
         fn statement_execute_after(&self, _: &druid_filter::FilterContext, _: u64, _: u64) {
             self.counters.after.fetch_add(1, Ordering::SeqCst);
+        }
+        fn statement_created(&self, _: &druid_filter::FilterContext) {
+            self.counters.stmt_created.fetch_add(1, Ordering::SeqCst);
+        }
+        fn statement_closed(&self, _: &druid_filter::FilterContext) {
+            self.counters.stmt_closed.fetch_add(1, Ordering::SeqCst);
+        }
+        fn statement_error(&self, _: &druid_filter::FilterContext, _: &DruidError) {
+            self.counters.stmt_error.fetch_add(1, Ordering::SeqCst);
         }
     }
 
@@ -285,9 +323,68 @@ mod tests {
         assert_eq!(stmt.execute("SELECT 1").unwrap(), 3);
         assert_eq!(counters.before.load(Ordering::SeqCst), 1);
         assert_eq!(counters.after.load(Ordering::SeqCst), 1);
+        assert_eq!(counters.stmt_created.load(Ordering::SeqCst), 1);
+        assert_eq!(counters.stmt_closed.load(Ordering::SeqCst), 1);
+        assert_eq!(counters.stmt_error.load(Ordering::SeqCst), 0);
 
         conn.close().unwrap();
         assert_eq!(counters.closed.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_proxy_statement_error_hooks_fire() {
+        let counters = Arc::new(Counters::default());
+        let fc = Arc::new(counting_chain(&counters));
+        let conn = Arc::new(ProxyConnection::new(
+            Arc::new(TrackingConn::new(9, true)),
+            fc,
+        ));
+        let stmt = conn.create_statement();
+
+        assert!(stmt.execute("SELECT BAD").is_err());
+        assert_eq!(counters.before.load(Ordering::SeqCst), 1);
+        assert_eq!(counters.after.load(Ordering::SeqCst), 0);
+        assert_eq!(counters.stmt_created.load(Ordering::SeqCst), 1);
+        assert_eq!(counters.stmt_error.load(Ordering::SeqCst), 1);
+        assert_eq!(counters.stmt_closed.load(Ordering::SeqCst), 1);
+    }
+
+    /// 被 Filter 拦截（如防火墙）时同样走 statement_error + statement_closed
+    struct DenyingFilter;
+    impl druid_filter::Filter for DenyingFilter {
+        fn statement_execute_before(
+            &self,
+            _: &druid_filter::FilterContext,
+        ) -> Result<(), DruidError> {
+            Err(DruidError::Wall("blocked".into()))
+        }
+    }
+
+    #[test]
+    fn test_proxy_filter_deny_counts_as_statement_error() {
+        let counters = Arc::new(Counters::default());
+        let mut fc = FilterChain::new("test");
+        fc.add_filter(Box::new(DenyingFilter));
+        fc.add_filter(Box::new(CountingFilter {
+            counters: counters.clone(),
+        }));
+        let conn = Arc::new(ProxyConnection::new(
+            Arc::new(TrackingConn::new(9, false)),
+            Arc::new(fc),
+        ));
+        let stmt = conn.create_statement();
+
+        assert!(matches!(
+            stmt.execute("DROP TABLE t"),
+            Err(DruidError::Wall(_))
+        ));
+        // 拦截发生在 DenyingFilter，后续 CountingFilter 的 before/after 不执行，
+        // 但 error/closed 是对整条链广播的
+        assert_eq!(counters.before.load(Ordering::SeqCst), 0);
+        assert_eq!(counters.after.load(Ordering::SeqCst), 0);
+        assert_eq!(counters.stmt_created.load(Ordering::SeqCst), 1);
+        assert_eq!(counters.stmt_error.load(Ordering::SeqCst), 1);
+        assert_eq!(counters.stmt_closed.load(Ordering::SeqCst), 1);
     }
 
     #[test]

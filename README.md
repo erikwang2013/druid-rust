@@ -1,7 +1,7 @@
 # Druid Rust
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-428%20passed-green)]()
+[![Tests](https://img.shields.io/badge/tests-431%20passed-green)]()
 
 ![Druid-Rust 项目宠物 · 德鲁伊猫头鹰「小德」](docs/assets/mascot.svg)
 
@@ -445,6 +445,10 @@ tokio::spawn(async {
 // 请求需带 Authorization: Bearer my-secret
 ```
 
+> 启用 token 后，数据与页面端点（`/druid/*.json`、`/druid/index.html`）需要鉴权；
+> 静态宠物资源（`/druid/mascot.svg`、`/druid/pet/<name>.svg`）公开，便于浏览器加载
+> favicon，且不含 SQL 或统计数据。
+
 ### 高可用多数据源
 
 ```rust
@@ -576,7 +580,7 @@ impl Filter for MyLogFilter {
 
 ```toml
 [workspace.package]
-version = "1.3.1"
+version = "1.4.0"
 ```
 
 所有 10 个子 crate 通过 `version.workspace = true` 继承，修改版本号只需改一处。
@@ -595,7 +599,7 @@ cargo build --release    # LTO + codegen-units=1
 cargo check --workspace          # 快速检查编译
 cargo clippy --all-targets       # Lint 检查（当前: 0 warnings）
 cargo fmt --all                  # 格式化
-cargo test --workspace           # 428 passed; 0 failed
+cargo test --workspace           # 431 passed; 0 failed
 ```
 
 ### 运行基准
@@ -617,14 +621,14 @@ cargo run --example basic
 | druid-core | 49 |
 | druid-util | 57 |
 | druid-sql | 86 |
-| druid-wall | 62 |
+| druid-wall | 63 |
 | druid-pool | 83 |
 | druid-filter | 20 |
 | druid-console | 28 |
 | druid-stat | 22 |
 | druid-ha | 12 |
-| druid-proxy | 9 |
-| **总计** | **428** |
+| druid-proxy | 11 |
+| **总计** | **431** |
 
 ## 审查报告
 
@@ -632,7 +636,7 @@ cargo run --example basic
 
 - `cargo check`: ✅ 零警告
 - `cargo clippy --all-targets`: ✅ 零警告
-- `cargo test`: ✅ 428/428 通过
+- `cargo test`: ✅ 431/431 通过
 - `cargo fmt --check`: ✅ 格式一致
 
 ## License

@@ -105,6 +105,15 @@ async fn test_auth_requires_token() {
     let resp = get_authed(app.clone(), "/druid/sql.json", Some("s3cret")).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
+    // 静态宠物资源公开：favicon 无法携带 Bearer 头
+    for uri in ["/druid/mascot.svg", "/druid/pet/smile.svg"] {
+        let resp = get_authed(app.clone(), uri, None).await;
+        assert_eq!(resp.status(), StatusCode::OK, "{uri}");
+    }
+    // 页面与数据接口仍然受保护
+    let resp = get_authed(app.clone(), "/druid/index.html", None).await;
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
     // 非 Bearer 方案 → 401
     let req = Request::builder()
         .uri("/druid/sql.json")

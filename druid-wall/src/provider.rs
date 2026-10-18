@@ -64,6 +64,9 @@ impl WallProvider {
     }
 
     fn cache_insert(&mut self, sql: &str, result: WallCheckResult) {
+        if self.max_cache_size == 0 {
+            return; // 0 = 禁用缓存（与 PSCache 的语义一致）
+        }
         if self.cache.len() >= self.max_cache_size {
             let evict_count = (self.max_cache_size / 2).max(1);
             for _ in 0..evict_count {
@@ -178,5 +181,14 @@ mod tests {
             p.check(&format!("SELECT {}", i));
             assert!(p.cache_size() <= 2);
         }
+    }
+
+    #[test]
+    fn test_zero_cache_size_disables_cache() {
+        let mut p = provider(0);
+        p.check("SELECT 1");
+        p.check("SELECT 1");
+        assert_eq!(p.cache_size(), 0);
+        assert_eq!(p.hit_count, 0);
     }
 }

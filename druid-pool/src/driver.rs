@@ -5,6 +5,9 @@ use std::time::Duration;
 /// 数据库驱动接口 — Rust 版 JDBC 抽象
 ///
 /// 各数据库实现此 trait 以提供真实的数据库连接。
+// async-trait 0.1 在 Rust 1.99+ 生成的 #[must_use] 与 Result 自带的 must_use 重复；
+// 这是宏展开产生的 false positive，无法在源码里删除。
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait Driver: Send + Sync + 'static {
     type Connection: Connection;
@@ -26,6 +29,8 @@ pub trait Driver: Send + Sync + 'static {
 }
 
 /// 数据库连接 trait
+// 同上：async-trait 宏展开产生的重复 must_use。
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait Connection: Send + Sync + Debug + 'static {
     /// 执行 SQL 查询

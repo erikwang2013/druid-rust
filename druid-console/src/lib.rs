@@ -8,6 +8,7 @@
 //! 因此：
 //! - 生产环境务必使用 [`start_server_with_token`] / [`make_router_with_token`] 启用
 //!   `Authorization: Bearer <token>` 校验，不要把无鉴权端点暴露在集群内网；
+//!   静态宠物 SVG（`/druid/mascot.svg`、`/druid/pet/:name`）始终公开，不含统计数据；
 //! - [`start_server`] / [`make_router`] 是**无鉴权**快捷方式，仅用于本机调试；
 //! - `/druid/*` 响应（含 401）都带 `Cache-Control: no-store`，避免统计内容被代理/浏览器缓存；
 //! - `/druid/sql.json`、`/druid/slow-sql.json` 支持 `?limit=`（默认 1000）+`?offset=` 分页。
@@ -182,28 +183,34 @@ pub fn make_router(stat_filter: Arc<StatFilter>) -> Router {
 
 /// 带可选 Bearer 鉴权的路由
 ///
-/// `token` 为 `Some(t)` 时要求所有 `/druid/*` 请求携带 `Authorization: Bearer t`，
+/// `token` 为 `Some(t)` 时要求所有**数据与页面**端点携带 `Authorization: Bearer t`，
 /// 否则返回 401（token 为空串则全部 401，不会静默降级为无鉴权）。
+/// 静态宠物资源（`/druid/mascot.svg`、`/druid/pet/:name`）保持公开：
+/// 浏览器请求 favicon 时无法携带 Bearer 头，且这些资源不含统计或 SQL 数据。
 pub fn make_router_with_token(stat_filter: Arc<StatFilter>, token: Option<String>) -> Router {
     let state = Arc::new(AppState { stat_filter });
-    let router = Router::new()
+    let protected = Router::new()
         .route("/druid/stat.json", get(stat_json))
         .route("/druid/sql.json", get(sql_json))
         .route("/druid/slow-sql.json", get(slow_sql_json))
         .route("/druid/index.html", get(index_page))
-        .route("/druid/mascot.svg", get(mascot_svg))
-        .route("/druid/pet/:name", get(pet_expression_svg))
         .with_state(state);
 
-    let router = match token {
-        Some(token) => router.layer(middleware::from_fn_with_state(
+    let protected = match token {
+        Some(token) => protected.layer(middleware::from_fn_with_state(
             Arc::new(token),
             auth_middleware,
         )),
-        None => router,
+        None => protected,
     };
-    // 放在最外层：401 响应同样带 no-store
-    router.layer(middleware::from_fn(no_store))
+
+    // 静态宠物资源不挂鉴权，见上方文档。
+    let assets = Router::new()
+        .route("/druid/mascot.svg", get(mascot_svg))
+        .route("/druid/pet/:name", get(pet_expression_svg));
+
+    // 放在最外层：401 与静态资源响应同样带 no-store
+    protected.merge(assets).layer(middleware::from_fn(no_store))
 }
 
 /// 校验 `Authorization: Bearer <token>`

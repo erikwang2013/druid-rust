@@ -61,7 +61,7 @@
     <circle cx="50" cy="472" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="476">慢 SQL 检测 + tracing 告警</text>
     <circle cx="50" cy="500" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="504">连接池实时指标</text>
     <circle cx="50" cy="528" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="532">lock-free AtomicU64 计数</text>
-    <circle cx="50" cy="556" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="560">axum Web 控制台 + JSON 接口</text>
+    <circle cx="50" cy="556" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="560">axum 控制台 + JSON 接口 + 宠物表情</text>
   </g>
 
   <!-- 卡片 5 · druid-filter -->

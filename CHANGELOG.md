@@ -2,6 +2,35 @@
 
 All notable changes to Druid-Rust.
 
+## [1.4.0] - 2026-10-19
+
+> 功能版：宠物表情形态正式进入 `druid-console`，同时修复代理层语句钩子、
+> 鉴权下的 favicon 加载与当前 stable 工具链的 clippy 失败。测试总数 428 → 431。
+
+### Added
+
+- **`druid-console` 宠物表情形态**：12 个表情 SVG 移入 `druid-console/assets/pet-expressions/`
+  并随 crate 发布；新增 `GET /druid/pet/<name>.svg`（`smile`/`joy`/`cry`/`depressed`/
+  `terrified`/`angry`/`coquettish`/`cute`/`pleasing`/`knocking`/`facepalm`/`tongue`）。
+  监控页头按状态自动切换（SQL 错误→愤怒、慢 SQL→沮丧、池用满→敲打、尚无执行→卖萌、
+  正常→微笑），悬停显示「小德 · 表情名」。
+- 防漂移测试保证 `docs/pet-expressions/` 与 crate 内副本字节一致。
+- 新增 `docs/assets/social-preview.png`（1280×640 GitHub Social Preview）。
+- README / `docs/README_EN.md` 改为纯 Markdown，宠物图移除圆形徽章背景。
+
+### Fixed
+
+- **`druid-proxy` 语句生命周期**：`ProxyStatement::execute` 补齐 `statement_created` /
+  `statement_error` / `statement_closed`，并使用与连接 ID 拼接的唯一 statement ID。
+  此前执行失败或被防火墙拦截时 `statement_error` 不触发，统计会漏记错误。
+- **`druid-console` 鉴权下的静态资源**：`/druid/mascot.svg` 与 `/druid/pet/<name>.svg`
+  不再要求 Bearer token。浏览器加载 favicon 时无法附加 Authorization 头，此前启用
+  token 后 favicon 必然 401；数据与页面端点仍受保护。
+- **`druid-wall` 缓存容量 0**：`WallProvider::new(..., 0)` 现在真正禁用缓存
+  （此前仍会缓存 1 条，与 `PSCache` 的 0=禁用语义不一致）。
+- **Rust 1.99 stable 的 clippy**：`Atomic::fetch_update` 迁移到 `try_update`；
+  async-trait 宏展开产生的重复 `must_use` 告警按 false positive 标注。
+
 ## [1.3.1] - 2026-10-01
 
 > 1.3.0 发布当日跟进的补丁。1.3.0 的对抗验证在发布后又挖出 **5 组 `DruidConfig` Debug
