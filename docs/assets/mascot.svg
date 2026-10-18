@@ -2,10 +2,6 @@
   <title id="drMascotTitle">Druid-Rust 项目宠物 · 德鲁伊猫头鹰「小德」</title>
   <desc id="drMascotDesc">一只头戴德鲁伊兜帽的猫头鹰，守护着由数据库连接组成的连接池。</desc>
   <defs>
-    <radialGradient id="drBadge" cx="50%" cy="36%" r="74%">
-      <stop offset="0" stop-color="#17384f"/>
-      <stop offset="1" stop-color="#0a1725"/>
-    </radialGradient>
     <linearGradient id="drOwl" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffd894"/>
       <stop offset="1" stop-color="#e09b3d"/>
@@ -19,10 +15,6 @@
       <stop offset="1" stop-color="#0e2438"/>
     </linearGradient>
   </defs>
-
-  <!-- 徽章底 -->
-  <circle cx="80" cy="80" r="76" fill="url(#drBadge)"/>
-  <circle cx="80" cy="80" r="74" fill="none" stroke="#34d399" stroke-opacity=".4" stroke-width="1.5"/>
 
   <!-- 连接池：三层数据库叠盘 -->
   <path d="M40 120 L40 140 A40 9 0 0 0 120 140 L120 120 Z" fill="url(#drPool)"/>

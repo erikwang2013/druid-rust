@@ -3,9 +3,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-423%20passed-green)]()
 
-<p align="center">
-  <img src="docs/assets/mascot.svg" width="140" alt="Druid-Rust 项目宠物 · 德鲁伊猫头鹰「小德」">
-</p>
+![Druid-Rust 项目宠物 · 德鲁伊猫头鹰「小德」](docs/assets/mascot.svg)
 
 [English Documentation](docs/README_EN.md) | 中文文档
 
@@ -25,18 +23,25 @@
 [`docs/assets/mascot.svg`](docs/assets/mascot.svg)，并注册为 `/druid/mascot.svg` 与站点 favicon。
 
 
-<!-- pet-expressions:start -->
 ## 项目宠物表情形态 · 小德
 
-<table align="center">
-<tr><td align="center"><img src="docs/pet-expressions/smile.svg" width="88" alt="笑"><br><b>笑</b><br><code>:emoji-smile:</code></td><td align="center"><img src="docs/pet-expressions/joy.svg" width="88" alt="欢乐"><br><b>欢乐</b><br><code>:emoji-joy:</code></td><td align="center"><img src="docs/pet-expressions/cry.svg" width="88" alt="哭"><br><b>哭</b><br><code>:emoji-cry:</code></td><td align="center"><img src="docs/pet-expressions/depressed.svg" width="88" alt="沮丧"><br><b>沮丧</b><br><code>:emoji-depressed:</code></td><td align="center"><img src="docs/pet-expressions/terrified.svg" width="88" alt="惊恐"><br><b>惊恐</b><br><code>:emoji-terrified:</code></td><td align="center"><img src="docs/pet-expressions/angry.svg" width="88" alt="愤怒"><br><b>愤怒</b><br><code>:emoji-angry:</code></td></tr>
-<tr><td align="center"><img src="docs/pet-expressions/coquettish.svg" width="88" alt="撒娇"><br><b>撒娇</b><br><code>:emoji-coquettish:</code></td><td align="center"><img src="docs/pet-expressions/cute.svg" width="88" alt="卖萌"><br><b>卖萌</b><br><code>:emoji-cute:</code></td><td align="center"><img src="docs/pet-expressions/pleasing.svg" width="88" alt="讨好"><br><b>讨好</b><br><code>:emoji-pleasing:</code></td><td align="center"><img src="docs/pet-expressions/knocking.svg" width="88" alt="敲打"><br><b>敲打</b><br><code>:emoji-knocking:</code></td><td align="center"><img src="docs/pet-expressions/facepalm.svg" width="88" alt="捂脸"><br><b>捂脸</b><br><code>:emoji-facepalm:</code></td><td align="center"><img src="docs/pet-expressions/tongue.svg" width="88" alt="吐舌头"><br><b>吐舌头</b><br><code>:emoji-tongue:</code></td></tr>
-</table>
+| 表情 | 预览 |
+|------|------|
+| **笑** `:emoji-smile:` | ![笑](docs/pet-expressions/smile.svg) |
+| **欢乐** `:emoji-joy:` | ![欢乐](docs/pet-expressions/joy.svg) |
+| **哭** `:emoji-cry:` | ![哭](docs/pet-expressions/cry.svg) |
+| **沮丧** `:emoji-depressed:` | ![沮丧](docs/pet-expressions/depressed.svg) |
+| **惊恐** `:emoji-terrified:` | ![惊恐](docs/pet-expressions/terrified.svg) |
+| **愤怒** `:emoji-angry:` | ![愤怒](docs/pet-expressions/angry.svg) |
+| **撒娇** `:emoji-coquettish:` | ![撒娇](docs/pet-expressions/coquettish.svg) |
+| **卖萌** `:emoji-cute:` | ![卖萌](docs/pet-expressions/cute.svg) |
+| **讨好** `:emoji-pleasing:` | ![讨好](docs/pet-expressions/pleasing.svg) |
+| **敲打** `:emoji-knocking:` | ![敲打](docs/pet-expressions/knocking.svg) |
+| **捂脸** `:emoji-facepalm:` | ![捂脸](docs/pet-expressions/facepalm.svg) |
+| **吐舌头** `:emoji-tongue:` | ![吐舌头](docs/pet-expressions/tongue.svg) |
 
 > 12 种彩色动态形态：笑 / 欢乐 / 哭 / 沮丧 / 惊恐 / 愤怒 / 撒娇 / 卖萌 / 讨好 / 敲打 / 捂脸 / 吐舌头。每个 SVG 自带表情、情绪特效与整体动效，并遵循 `prefers-reduced-motion`。
-<!-- pet-expressions:end -->
 
-<!-- assets-license:start -->
 ## 视觉资产授权 / Visual Assets License
 
 本项目的项目宠物、图片、图标、表情（包括 `docs/pet-expressions/` 等目录下的
@@ -45,7 +50,6 @@ SVG / PNG）**不是开源资产**，版权归作者所有。未经书面许可�
 [ASSETS-LICENSE.md](ASSETS-LICENSE.md)。
 
 > 代码部分仍遵循仓库原有 `LICENSE`；第三方素材（如明确标注的 Go Gopher 等）仍遵循其原许可证。
-<!-- assets-license:end -->
 
 
 ## 目录
@@ -151,6 +155,7 @@ druid-rust/
 ├── docs/
 │   ├── assets/                        # ── 项目图像资源 ──
 │   │   ├── mascot.svg                 #   项目宠物「小德」（README + 控制台共用）
+│   │   ├── social-preview.png         #   GitHub Social Preview（1280×640）
 │   │   ├── architecture.svg           #   架构设计图
 │   │   ├── features.svg               #   功能设计图
 │   │   └── lifecycle.svg              #   连接生命周期图
@@ -635,20 +640,9 @@ Apache 2.0 — 与 [Alibaba Druid](https://github.com/alibaba/druid) 保持一�
 
 感谢使用 Druid-Rust！如果这个项目对你有帮助，欢迎请开发者喝杯咖啡 ☕
 
-<p align="center">
-  <table align="center">
-    <tr>
-      <td align="center" width="200">
-        <img src="docs/alipay.png" width="130" height="130" alt="支付宝"><br>
-        <b>支付宝</b>
-      </td>
-      <td align="center" width="200">
-        <img src="docs/weixinpay.png" width="130" height="130" alt="微信支付"><br>
-        <b>微信支付</b>
-      </td>
-    </tr>
-  </table>
-</p>
+| 支付宝 | 微信支付 |
+|--------|----------|
+| ![支付宝](docs/alipay.png) | ![微信支付](docs/weixinpay.png) |
 
 ---
 

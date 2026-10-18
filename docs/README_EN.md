@@ -3,9 +3,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-423%20passed-green)]()
 
-<p align="center">
-  <img src="assets/mascot.svg" width="140" alt="Druid-Rust mascot — the Druid Owl">
-</p>
+![Druid-Rust mascot — the Druid Owl](assets/mascot.svg)
 
 [中文文档](../README.md) | English
 
@@ -130,6 +128,7 @@ druid-rust/
 ├── docs/
 │   ├── assets/            # Project image assets
 │   │   ├── mascot.svg     #   Mascot "Xiao De" (shared by README + console)
+│   │   ├── social-preview.png  # GitHub Social Preview (1280×640)
 │   │   ├── architecture.svg  # Architecture diagram
 │   │   ├── features.svg      # Feature map
 │   │   └── lifecycle.svg     # Connection lifecycle diagram
@@ -504,20 +503,9 @@ Apache 2.0 — same as [Alibaba Druid](https://github.com/alibaba/druid).
 
 Thank you for using Druid-Rust! If this project helps you, feel free to buy the developer a coffee ☕
 
-<p align="center">
-  <table align="center">
-    <tr>
-      <td align="center" width="200">
-        <img src="alipay.png" width="130" height="130" alt="Alipay"><br>
-        <b>Alipay</b>
-      </td>
-      <td align="center" width="200">
-        <img src="weixinpay.png" width="130" height="130" alt="WeChat Pay"><br>
-        <b>WeChat Pay</b>
-      </td>
-    </tr>
-  </table>
-</p>
+| Alipay | WeChat Pay |
+|--------|------------|
+| ![Alipay](alipay.png) | ![WeChat Pay](weixinpay.png) |
 
 ---
 
