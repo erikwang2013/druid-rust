@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 
-use axum::extract::{Query, Request, State};
+use axum::extract::{Path, Query, Request, State};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
@@ -31,6 +31,104 @@ use druid_stat::StatFilter;
 /// `tests.rs::mascot_matches_docs_copy` 保持字节一致（从 registry 解包构建时
 /// 该测试自动跳过）。
 const MASCOT_SVG: &str = include_str!("../assets/mascot.svg");
+
+/// 项目宠物的表情形态。
+struct PetExpression {
+    /// 路由名（`/druid/pet/<name>.svg`）
+    name: &'static str,
+    /// 中文标签，用于文档与测试断言
+    label: &'static str,
+    svg: &'static str,
+}
+
+/// 12 种表情形态。资产必须放在 crate 内，原因见 [`MASCOT_SVG`]。
+const PET_EXPRESSIONS: &[PetExpression] = &[
+    PetExpression {
+        name: "smile",
+        label: "笑",
+        svg: include_str!("../assets/pet-expressions/smile.svg"),
+    },
+    PetExpression {
+        name: "joy",
+        label: "欢乐",
+        svg: include_str!("../assets/pet-expressions/joy.svg"),
+    },
+    PetExpression {
+        name: "cry",
+        label: "哭",
+        svg: include_str!("../assets/pet-expressions/cry.svg"),
+    },
+    PetExpression {
+        name: "depressed",
+        label: "沮丧",
+        svg: include_str!("../assets/pet-expressions/depressed.svg"),
+    },
+    PetExpression {
+        name: "terrified",
+        label: "惊恐",
+        svg: include_str!("../assets/pet-expressions/terrified.svg"),
+    },
+    PetExpression {
+        name: "angry",
+        label: "愤怒",
+        svg: include_str!("../assets/pet-expressions/angry.svg"),
+    },
+    PetExpression {
+        name: "coquettish",
+        label: "撒娇",
+        svg: include_str!("../assets/pet-expressions/coquettish.svg"),
+    },
+    PetExpression {
+        name: "cute",
+        label: "卖萌",
+        svg: include_str!("../assets/pet-expressions/cute.svg"),
+    },
+    PetExpression {
+        name: "pleasing",
+        label: "讨好",
+        svg: include_str!("../assets/pet-expressions/pleasing.svg"),
+    },
+    PetExpression {
+        name: "knocking",
+        label: "敲打",
+        svg: include_str!("../assets/pet-expressions/knocking.svg"),
+    },
+    PetExpression {
+        name: "facepalm",
+        label: "捂脸",
+        svg: include_str!("../assets/pet-expressions/facepalm.svg"),
+    },
+    PetExpression {
+        name: "tongue",
+        label: "吐舌头",
+        svg: include_str!("../assets/pet-expressions/tongue.svg"),
+    },
+];
+
+fn pet_expression(name: &str) -> Option<&'static PetExpression> {
+    PET_EXPRESSIONS.iter().find(|pet| pet.name == name)
+}
+
+fn pet_or_panic(name: &str) -> &'static PetExpression {
+    pet_expression(name).unwrap_or_else(|| panic!("missing pet expression: {name}"))
+}
+
+/// 按当前监控状态挑选表情形态。
+///
+/// 优先级：SQL 错误 > 慢 SQL > 池已用满 > 尚无执行 > 正常。
+fn pet_for_status(stat: &druid_stat::DataSourceStat, slow_count: usize) -> &'static PetExpression {
+    if stat.error_count > 0 {
+        pet_or_panic("angry")
+    } else if slow_count > 0 {
+        pet_or_panic("depressed")
+    } else if stat.active_count > 0 && stat.idle_count == 0 {
+        pet_or_panic("knocking")
+    } else if stat.execute_count == 0 {
+        pet_or_panic("cute")
+    } else {
+        pet_or_panic("smile")
+    }
+}
 
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -94,6 +192,7 @@ pub fn make_router_with_token(stat_filter: Arc<StatFilter>, token: Option<String
         .route("/druid/slow-sql.json", get(slow_sql_json))
         .route("/druid/index.html", get(index_page))
         .route("/druid/mascot.svg", get(mascot_svg))
+        .route("/druid/pet/:name", get(pet_expression_svg))
         .with_state(state);
 
     let router = match token {
@@ -139,6 +238,15 @@ async fn no_store(req: Request, next: Next) -> Response {
 
 async fn mascot_svg() -> impl IntoResponse {
     ([(header::CONTENT_TYPE, "image/svg+xml")], MASCOT_SVG)
+}
+
+/// `/druid/pet/<name>.svg`：返回指定表情形态；未知名称返回 404。
+async fn pet_expression_svg(Path(name): Path<String>) -> Response {
+    let name = name.strip_suffix(".svg").unwrap_or(&name);
+    match pet_expression(name) {
+        Some(pet) => ([(header::CONTENT_TYPE, "image/svg+xml")], pet.svg).into_response(),
+        None => (StatusCode::NOT_FOUND, "unknown pet expression").into_response(),
+    }
 }
 
 /// 无鉴权启动控制台（仅本机调试用，见 crate 文档的安全说明）
@@ -209,6 +317,7 @@ async fn index_page(State(state): State<Arc<AppState>>) -> axum::response::Html<
     let sql_stats = state.stat_filter.get_sql_stats();
     // 复用同一份快照，避免重复取锁/克隆/排序
     let slow = state.stat_filter.get_slow_sql_from(&sql_stats);
+    let pet = pet_for_status(&stat, slow.len());
 
     let mut rows = String::new();
     for s in sql_stats.iter().take(20) {
@@ -238,7 +347,7 @@ table{{width:100%;border-collapse:collapse;background:#fff;margin-top:20px}}
 th,td{{padding:8px 12px;text-align:left;border-bottom:1px solid #eee;font-size:13px}}
 th{{background:#fafafa;font-weight:bold}}</style></head>
 <body>
-<div class="hdr">{mascot}<h1>Druid Monitor — {name}</h1></div>
+<div class="hdr" data-pet="{pet_name}">{mascot}<h1>Druid Monitor — {name}</h1></div>
 <div class="stat">
 <div class="card"><div class="val">{active}</div><div class="label">Active</div></div>
 <div class="card"><div class="val">{idle}</div><div class="label">Idle</div></div>
@@ -251,7 +360,8 @@ th{{background:#fafafa;font-weight:bold}}</style></head>
 <table><tr><th>SQL</th><th>Exec Count</th><th>Total</th><th>Max</th><th>Errors</th><th>Last Run</th></tr>
 {rows}</table>
 </body></html>"#,
-        mascot = MASCOT_SVG,
+        mascot = pet.svg,
+        pet_name = pet.name,
         name = html_escape(&stat.name),
         active = stat.active_count,
         idle = stat.idle_count,

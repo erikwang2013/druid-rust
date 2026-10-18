@@ -75,6 +75,7 @@ async fn test_all_responses_are_no_store() {
         "/druid/slow-sql.json",
         "/druid/index.html",
         "/druid/mascot.svg",
+        "/druid/pet/smile.svg",
     ] {
         let resp = get(test_app(), uri).await;
         assert_eq!(
@@ -174,6 +175,22 @@ async fn test_index_uses_single_stats_snapshot() {
     let html = String::from_utf8_lossy(&body);
     assert!(html.contains("SLOW Q"));
     assert!(html.contains(">1</div><div class=\"label\">Slow SQL"));
+    assert!(html.contains(r#"data-pet="depressed""#));
+}
+
+#[tokio::test]
+async fn test_index_reflects_error_expression() {
+    let filter = StatFilter::new("ds", 1000);
+    filter.statement_error(
+        &druid_filter::FilterContext::new("ds").with_sql("SELECT bad"),
+        &druid_core::DruidError::Database("boom".into()),
+    );
+    let resp = get(app_with(filter), "/druid/index.html").await;
+    let body = axum::body::to_bytes(resp.into_body(), 102400)
+        .await
+        .unwrap();
+    let html = String::from_utf8_lossy(&body);
+    assert!(html.contains(r#"data-pet="angry""#));
 }
 
 #[tokio::test]
@@ -261,10 +278,68 @@ async fn test_index_embeds_mascot() {
         .await
         .unwrap();
     let html = String::from_utf8_lossy(&body);
-    // 宠物以 inline SVG 形式出现在页头，并注册为 favicon
-    assert!(html.contains(r#"<div class="hdr"><svg"#));
+    // 宠物以 inline SVG 形式出现在页头，并注册为 favicon；无数据时为「卖萌」
+    assert!(html.contains(r#"<div class="hdr" data-pet="cute"><svg"#));
     assert!(html.contains(r#"href="/druid/mascot.svg""#));
     assert_eq!(html.matches("<svg").count(), 1);
+}
+
+#[tokio::test]
+async fn test_pet_expression_endpoints() {
+    for pet in PET_EXPRESSIONS {
+        let uri = format!("/druid/pet/{}.svg", pet.name);
+        let resp = get(test_app(), &uri).await;
+        assert_eq!(resp.status(), StatusCode::OK, "{uri}");
+        assert_eq!(resp.headers().get("content-type").unwrap(), "image/svg+xml");
+        let body = axum::body::to_bytes(resp.into_body(), 204800)
+            .await
+            .unwrap();
+        let svg = String::from_utf8_lossy(&body);
+        assert!(svg.starts_with("<svg"), "{uri}");
+        assert!(svg.contains(pet.label), "{uri} 缺少标签 {}", pet.label);
+    }
+}
+
+#[tokio::test]
+async fn test_unknown_pet_expression_404() {
+    let resp = get(test_app(), "/druid/pet/nope.svg").await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[test]
+fn test_pet_status_mapping() {
+    use druid_stat::DataSourceStat;
+
+    let fresh = DataSourceStat::default();
+    assert_eq!(pet_for_status(&fresh, 0).name, "cute");
+
+    let active = DataSourceStat {
+        execute_count: 1,
+        ..Default::default()
+    };
+    assert_eq!(pet_for_status(&active, 0).name, "smile");
+
+    let slow = DataSourceStat {
+        execute_count: 1,
+        ..Default::default()
+    };
+    assert_eq!(pet_for_status(&slow, 1).name, "depressed");
+
+    let busy = DataSourceStat {
+        execute_count: 1,
+        active_count: 2,
+        ..Default::default()
+    };
+    assert_eq!(pet_for_status(&busy, 0).name, "knocking");
+
+    let errored = DataSourceStat {
+        execute_count: 1,
+        error_count: 1,
+        active_count: 2,
+        ..Default::default()
+    };
+    // SQL 错误优先级最高，即使同时存在慢 SQL 也显示「愤怒」
+    assert_eq!(pet_for_status(&errored, 3).name, "angry");
 }
 
 #[tokio::test]
@@ -341,4 +416,24 @@ fn mascot_matches_docs_copy() {
         include_str!("../assets/mascot.svg"),
         "两份 mascot.svg 已漂移：更新了 docs/assets/ 却忘了 druid-console/assets/"
     );
+}
+
+/// 表情形态资产防漂移：`docs/pet-expressions/`（README 用）与
+/// `druid-console/assets/pet-expressions/`（`include_str!` 用）必须字节一致。
+#[test]
+fn pet_expressions_match_docs_copies() {
+    let docs_dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/pet-expressions");
+    if !docs_dir.exists() {
+        return; // 已发布的 tarball 内没有 docs/，跳过
+    }
+    for pet in PET_EXPRESSIONS {
+        let path = docs_dir.join(format!("{}.svg", pet.name));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            pet.svg,
+            "{} 已漂移：更新了 docs/pet-expressions/ 却忘了 druid-console/assets/pet-expressions/",
+            pet.name
+        );
+    }
 }
