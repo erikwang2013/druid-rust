@@ -1,7 +1,7 @@
 # Druid-Rust
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-423%20passed-green)]()
+[![Tests](https://img.shields.io/badge/tests-428%20passed-green)]()
 
 ![Druid-Rust mascot — the Druid Owl](assets/mascot.svg)
 
@@ -21,6 +21,9 @@
 
 The owl also appears in the Web console header: `druid-console` inlines the same
 [`assets/mascot.svg`](assets/mascot.svg) via `include_str!`, and serves it at `/druid/mascot.svg` as the favicon.
+The console switches between the 12 expression forms based on live status (SQL error → angry,
+slow SQL → depressed, pool exhausted → knocking, no queries yet → cute, healthy → smile); every
+form is available at `/druid/pet/<name>.svg`.
 
 > The diagrams below use Chinese labels with English identifiers, matching the primary README.
 
@@ -132,6 +135,7 @@ druid-rust/
 │   │   ├── architecture.svg  # Architecture diagram
 │   │   ├── features.svg      # Feature map
 │   │   └── lifecycle.svg     # Connection lifecycle diagram
+│   ├── pet-expressions/   # 12 expression-form SVGs (used by README + console)
 │   ├── PLAN.md            # Migration plan
 │   ├── README_EN.md       # English docs (this file)
 │   ├── TEST_REPORT.md     # Test report
@@ -150,8 +154,9 @@ druid-rust/
 ├── druid-ha/              # High availability: load balancing, failover
 └── druid-console/         # Web console: axum server, dashboard, JSON APIs
                            #   • /druid/stat.json, /druid/sql.json, /druid/slow-sql.json
-                           #   • /druid/index.html (dashboard, inlines the mascot)
+                           #   • /druid/index.html (dashboard, inlines the status-based mascot expression)
                            #   • /druid/mascot.svg (mascot, also the favicon)
+                           #   • /druid/pet/<name>.svg (12 expression forms)
 ```
 
 ### Crate Dependency Graph
@@ -453,7 +458,7 @@ Key differences from Java:
 cargo check --workspace          # Quick compile check
 cargo clippy --all-targets       # Lint check (current: 0 warnings)
 cargo fmt --all                  # Format
-cargo test --workspace           # 423 passed; 0 failed
+cargo test --workspace           # 428 passed; 0 failed
 ```
 
 ### Benchmarks
@@ -478,11 +483,11 @@ cargo run --example basic
 | druid-wall | 62 |
 | druid-pool | 83 |
 | druid-filter | 20 |
-| druid-console | 23 |
+| druid-console | 28 |
 | druid-stat | 22 |
 | druid-ha | 12 |
 | druid-proxy | 9 |
-| **Total** | **423** |
+| **Total** | **428** |
 
 ## Review Report
 
@@ -490,7 +495,7 @@ Latest code review: [REVIEW_REPORT.md](REVIEW_REPORT.md)
 
 - `cargo check`: ✅ Zero warnings
 - `cargo clippy --all-targets`: ✅ Zero warnings
-- `cargo test`: ✅ 423/423 passed
+- `cargo test`: ✅ 428/428 passed
 - `cargo fmt --check`: ✅ Consistent formatting
 
 ## License

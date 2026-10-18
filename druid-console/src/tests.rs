@@ -279,7 +279,9 @@ async fn test_index_embeds_mascot() {
         .unwrap();
     let html = String::from_utf8_lossy(&body);
     // 宠物以 inline SVG 形式出现在页头，并注册为 favicon；无数据时为「卖萌」
-    assert!(html.contains(r#"<div class="hdr" data-pet="cute"><svg"#));
+    assert!(html.contains(
+        r#"<div class="hdr" data-pet="cute"><span class="pet" title="小德 · 卖萌"><svg"#
+    ));
     assert!(html.contains(r#"href="/druid/mascot.svg""#));
     assert_eq!(html.matches("<svg").count(), 1);
 }

@@ -1,7 +1,7 @@
 # Druid Rust
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-423%20passed-green)]()
+[![Tests](https://img.shields.io/badge/tests-428%20passed-green)]()
 
 ![Druid-Rust 项目宠物 · 德鲁伊猫头鹰「小德」](docs/assets/mascot.svg)
 
@@ -595,7 +595,7 @@ cargo build --release    # LTO + codegen-units=1
 cargo check --workspace          # 快速检查编译
 cargo clippy --all-targets       # Lint 检查（当前: 0 warnings）
 cargo fmt --all                  # 格式化
-cargo test --workspace           # 423 passed; 0 failed
+cargo test --workspace           # 428 passed; 0 failed
 ```
 
 ### 运行基准
@@ -620,11 +620,11 @@ cargo run --example basic
 | druid-wall | 62 |
 | druid-pool | 83 |
 | druid-filter | 20 |
-| druid-console | 23 |
+| druid-console | 28 |
 | druid-stat | 22 |
 | druid-ha | 12 |
 | druid-proxy | 9 |
-| **总计** | **423** |
+| **总计** | **428** |
 
 ## 审查报告
 
@@ -632,7 +632,7 @@ cargo run --example basic
 
 - `cargo check`: ✅ 零警告
 - `cargo clippy --all-targets`: ✅ 零警告
-- `cargo test`: ✅ 423/423 通过
+- `cargo test`: ✅ 428/428 通过
 - `cargo fmt --check`: ✅ 格式一致
 
 ## License

@@ -339,6 +339,7 @@ async fn index_page(State(state): State<Arc<AppState>>) -> axum::response::Html<
 <style>body{{font-family:monospace;margin:20px;background:#f5f5f5}}
 h1{{color:#333;margin:0}} .stat{{display:flex;gap:15px;flex-wrap:wrap;margin:15px 0}}
 .hdr{{display:flex;align-items:center;gap:14px;margin-bottom:10px}}
+.hdr .pet{{display:flex;flex:none}}
 .hdr svg{{width:56px;height:56px;flex:none}}
 .card{{background:#fff;padding:15px;border-radius:8px;min-width:120px;text-align:center}}
 .card .val{{font-size:28px;font-weight:bold;color:#1890ff}}
@@ -347,7 +348,7 @@ table{{width:100%;border-collapse:collapse;background:#fff;margin-top:20px}}
 th,td{{padding:8px 12px;text-align:left;border-bottom:1px solid #eee;font-size:13px}}
 th{{background:#fafafa;font-weight:bold}}</style></head>
 <body>
-<div class="hdr" data-pet="{pet_name}">{mascot}<h1>Druid Monitor — {name}</h1></div>
+<div class="hdr" data-pet="{pet_name}"><span class="pet" title="小德 · {pet_label}">{mascot}</span><h1>Druid Monitor — {name}</h1></div>
 <div class="stat">
 <div class="card"><div class="val">{active}</div><div class="label">Active</div></div>
 <div class="card"><div class="val">{idle}</div><div class="label">Idle</div></div>
@@ -362,6 +363,7 @@ th{{background:#fafafa;font-weight:bold}}</style></head>
 </body></html>"#,
         mascot = pet.svg,
         pet_name = pet.name,
+        pet_label = pet.label,
         name = html_escape(&stat.name),
         active = stat.active_count,
         idle = stat.idle_count,
