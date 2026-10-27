@@ -76,16 +76,16 @@
   </g>
 
   
-  <circle cx="70" cy="80" r="11" fill="#fffdf7"/>
-  <circle cx="90" cy="80" r="11" fill="#fffdf7"/>
-  <circle cx="70" cy="80" r="5.5" fill="#12263a"/>
-  <circle cx="90" cy="80" r="5.5" fill="#12263a"/>
-  <circle cx="72" cy="77.5" r="2" fill="#ffffff"/>
-  <circle cx="92" cy="77.5" r="2" fill="#ffffff"/>
-  <path d="M80 84 L75 94 L85 94 Z" fill="#f59e0b"/>
+  
+  
+  
+  
+  
+  
+  
 
   
   <path d="M80 36 C 105 36 118 56 110 94 C 107 72 97 58 80 58 C 63 58 53 72 50 94 C 42 56 55 36 80 36 Z" fill="url(#drHood)"/>
   <path d="M80 36 C 105 36 118 56 110 94" fill="none" stroke="#86efac" stroke-opacity=".5" stroke-width="1.4"/>
   <path d="M80 36 C 80 28 83 24 88 20" stroke="#4ade80" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <path d="M88 20 C 97 14 105 18 102 27 C 94 32 86 28 88 20 Z" fill="#86efac"/></g><g class="ex-face"><ellipse cx="80" cy="87" rx="22" ry="18" fill="#F3CD92"/><path d="M 64.78,78.9 Q 70,86.05 75.22,78.9" fill="none" stroke="#12263A" stroke-width="1.8" stroke-linecap="round"/><path d="M 73.67,92.1 Q 75.26,86.56 76.84,88.14 Q 78.42,86.56 80,92.1 Q 81.58,97.64 83.16,96.06 Q 84.74,97.64 86.33,92.1" fill="none" stroke="#12263A" stroke-width="1.7" stroke-linecap="round"/><ellipse cx="65.88" cy="87.42" rx="4.29" ry="2.31" fill="#FF8FB3" opacity="0.7"/><ellipse cx="94.12" cy="87.42" rx="4.29" ry="2.31" fill="#FF8FB3" opacity="0.7"/><g transform="translate(90.83 80.83) rotate(12)"><rect class="ex-anim-palm" x="-4.74" y="-6.64" width="9.49" height="12.65" rx="3.48" fill="#F3CD92" stroke="#12263A" stroke-width="1.4"/><path class="ex-anim-palm" d="M -2.28,-4.74 L -2.28,-0.63" stroke="#12263A" stroke-width="1" stroke-linecap="round" opacity=".55"/><path class="ex-anim-palm" d="M 0,-4.74 L 0,-0.63" stroke="#12263A" stroke-width="1" stroke-linecap="round" opacity=".55"/><path class="ex-anim-palm" d="M 2.28,-4.74 L 2.28,-0.63" stroke="#12263A" stroke-width="1" stroke-linecap="round" opacity=".55"/></g><g transform="translate(64.63 63.54)"><circle class="ex-anim-steam" style="animation-delay:0.0s" r="1.81" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(66.28 62.38)"><circle class="ex-anim-steam" style="animation-delay:0.28s" r="2.31" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(67.93 63.7)"><circle class="ex-anim-steam" style="animation-delay:0.56s" r="1.65" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(0 0)"><path class="ex-anim-sweat" style="animation-delay:0.2s" d="M 97.97,71.75 C 99.62,74.39 99.62,76.81 97.97,76.81 C 96.32,76.81 96.32,74.39 97.97,71.75 Z" fill="#6FB2F0"/><circle cx="97.97" cy="74.28" r="0.48" fill="#FFFFFF" opacity=".8"/></g></g></g></svg>
+  <path d="M88 20 C 97 14 105 18 102 27 C 94 32 86 28 88 20 Z" fill="#86efac"/></g><g class="ex-face"><path d="M 64.78,78.9 Q 70,86.05 75.22,78.9" fill="none" stroke="#12263A" stroke-width="1.8" stroke-linecap="round"/><path d="M 73.67,92.1 Q 75.26,86.56 76.84,88.14 Q 78.42,86.56 80,92.1 Q 81.58,97.64 83.16,96.06 Q 84.74,97.64 86.33,92.1" fill="none" stroke="#12263A" stroke-width="1.7" stroke-linecap="round"/><ellipse cx="65.88" cy="87.42" rx="4.29" ry="2.31" fill="#FF8FB3" opacity="0.7"/><ellipse cx="94.12" cy="87.42" rx="4.29" ry="2.31" fill="#FF8FB3" opacity="0.7"/><g transform="translate(90.83 80.83) rotate(12)"><rect class="ex-anim-palm" x="-4.74" y="-6.64" width="9.49" height="12.65" rx="3.48" fill="#F3CD92" stroke="#12263A" stroke-width="1.4"/><path class="ex-anim-palm" d="M -2.28,-4.74 L -2.28,-0.63" stroke="#12263A" stroke-width="1" stroke-linecap="round" opacity=".55"/><path class="ex-anim-palm" d="M 0,-4.74 L 0,-0.63" stroke="#12263A" stroke-width="1" stroke-linecap="round" opacity=".55"/><path class="ex-anim-palm" d="M 2.28,-4.74 L 2.28,-0.63" stroke="#12263A" stroke-width="1" stroke-linecap="round" opacity=".55"/></g><g transform="translate(64.63 63.54)"><circle class="ex-anim-steam" style="animation-delay:0.0s" r="1.81" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(66.28 62.38)"><circle class="ex-anim-steam" style="animation-delay:0.28s" r="2.31" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(67.93 63.7)"><circle class="ex-anim-steam" style="animation-delay:0.56s" r="1.65" fill="#D7DEE8" opacity=".72"/></g><g transform="translate(0 0)"><path class="ex-anim-sweat" style="animation-delay:0.2s" d="M 97.97,71.75 C 99.62,74.39 99.62,76.81 97.97,76.81 C 96.32,76.81 96.32,74.39 97.97,71.75 Z" fill="#6FB2F0"/><circle cx="97.97" cy="74.28" r="0.48" fill="#FFFFFF" opacity=".8"/></g></g></g></svg>
