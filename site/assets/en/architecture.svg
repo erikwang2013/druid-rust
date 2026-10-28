@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" width="1000" height="620" role="img" aria-labelledby="drArchTitle drArchDesc">
+  <title id="drArchTitle">Druid-Rust Architecture</title>
+  <desc id="drArchDesc">Seven-layer architecture: layer 0 foundation through layer 6 console, dependencies point one way.</desc>
+
+  <rect x="0" y="0" width="1000" height="620" rx="14" fill="#0b1b2b"/>
+  <rect x="0.5" y="0.5" width="999" height="619" rx="13.5" fill="none" stroke="#1e3a5f"/>
+
+  <text x="32" y="46" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="20" font-weight="700" fill="#e2e8f0">Druid-Rust Architecture</text>
+  <text x="32" y="70" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#7c93a8">10 crates · 7 layers · dependencies point down · composition over inheritance</text>
+
+  <!-- Layer 6 -->
+  <rect x="24" y="88" width="952" height="52" rx="10" fill="#ffffff" fill-opacity=".025" stroke="#ffffff" stroke-opacity=".06"/>
+  <rect x="24" y="88" width="4" height="52" rx="2" fill="#38bdf8"/>
+  <text x="48" y="110" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#38bdf8">Layer 6</text>
+  <text x="48" y="126" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#64748b">Console</text>
+  <rect x="190" y="94" width="786" height="40" rx="8" fill="#38bdf8" fill-opacity=".1" stroke="#38bdf8" stroke-opacity=".45" stroke-width="1.2"/>
+  <text x="206" y="110" font-family="ui-monospace, 'SFMono-Regular', monospace" font-size="13" font-weight="700" fill="#7dd3fc">druid-console</text>
+  <text x="206" y="124" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">axum HTTP console · /druid/stat.json · /druid/sql.json · /druid/slow-sql.json</text>
+
+  <!-- Layer 5 -->
+  <rect x="24" y="160" width="952" height="52" rx="10" fill="#ffffff" fill-opacity=".025" stroke="#ffffff" stroke-opacity=".06"/>
+  <rect x="24" y="160" width="4" height="52" rx="2" fill="#a78bfa"/>
+  <text x="48" y="182" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#a78bfa">Layer 5</text>
+  <text x="48" y="198" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#64748b">Advanced</text>
+  <rect x="190" y="166" width="380" height="40" rx="8" fill="#a78bfa" fill-opacity=".1" stroke="#a78bfa" stroke-opacity=".45" stroke-width="1.2"/>
+  <text x="206" y="182" font-family="ui-monospace, 'SFMono-Regular', monospace" font-size="13" font-weight="700" fill="#c4b5fd">druid-ha</text>
+  <text x="206" y="196" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">Weighted round-robin · health checks · failover</text>
+  <rect x="586" y="166" width="390" height="40" rx="8" fill="#a78bfa" fill-opacity=".1" stroke="#a78bfa" stroke-opacity=".45" stroke-width="1.2"/>
+  <text x="602" y="182" font-family="ui-monospace, 'SFMono-Regular', monospace" font-size="13" font-weight="700" fill="#c4b5fd">druid-proxy</text>
+  <text x="602" y="196" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">ProxyConnection · ProxyStatement interception</text>
+
+  <!-- Layer 4 -->
+  <rect x="24" y="232" width="952" height="52" rx="10" fill="#4ade80" fill-opacity=".05" stroke="#4ade80" stroke-opacity=".18"/>
+  <rect x="24" y="232" width="4" height="52" rx="2" fill="#4ade80"/>
+  <text x="48" y="254" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#4ade80">Layer 4</text>
+  <text x="48" y="270" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#64748b">Pool core</text>
+  <rect x="190" y="238" width="786" height="40" rx="8" fill="#4ade80" fill-opacity=".14" stroke="#4ade80" stroke-opacity=".6" stroke-width="1.4"/>
+  <text x="206" y="254" font-family="ui-monospace, 'SFMono-Regular', monospace" font-size="13" font-weight="700" fill="#86efac">druid-pool</text>
+  <text x="206" y="268" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">Semaphore concurrency control · PoolGuard RAII return · idle eviction · KeepAlive · PSCache</text>
+
+  <!-- Layer 3 -->
+  <rect x="24" y="304" width="952" height="52" rx="10" fill="#ffffff" fill-opacity=".025" stroke="#ffffff" stroke-opacity=".06"/>
+  <rect x="24" y="304" width="4" height="52" rx="2" fill="#fbbf24"/>
+  <text x="48" y="326" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#fbbf24">Layer 3</text>
+  <text x="48" y="342" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#64748b">Filter plugins</text>
+  <rect x="190" y="310" width="380" height="40" rx="8" fill="#fbbf24" fill-opacity=".1" stroke="#fbbf24" stroke-opacity=".45" stroke-width="1.2"/>
+  <text x="206" y="326" font-family="ui-monospace, 'SFMono-Regular', monospace" font-size="13" font-weight="700" fill="#fcd34d">druid-wall</text>
+  <text x="206" y="340" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">13 security checks · LRU check cache</text>
+  <rect x="586" y="310" width="390" height="40" rx="8" fill="#fbbf24" fill-opacity=".1" stroke="#fbbf24" stroke-opacity=".45" stroke-width="1.2"/>
+  <text x="602" y="326" font-family="ui-monospace, 'SFMono-Regular', monospace" font-size="13" font-weight="700" fill="#fcd34d">druid-stat</text>
+  <text x="602" y="340" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">SQL stats · slow SQL alerts · PoolMetrics</text>
+
+  <!-- Layer 2 -->
+  <rect x="24" y="376" width="952" height="52" rx="10" fill="#ffffff" fill-opacity=".025" stroke="#ffffff" stroke-opacity=".06"/>
+  <rect x="24" y="376" width="4" height="52" rx="2" fill="#f472b6"/>
+  <text x="48" y="398" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#f472b6">Layer 2</text>
+  <text x="48" y="414" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#64748b">Pluggable</text>
+  <rect x="190" y="382" width="786" height="40" rx="8" fill="#f472b6" fill-opacity=".1" stroke="#f472b6" stroke-opacity=".45" stroke-width="1.2"/>
+  <text x="206" y="398" font-family="ui-monospace, 'SFMono-Regular', monospace" font-size="13" font-weight="700" fill="#f9a8d4">druid-filter</text>
+  <text x="206" y="412" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">Filter trait 20+ hooks · FilterAdapter no-op · FilterChain</text>
+
+  <!-- Layer 1 -->
+  <rect x="24" y="448" width="952" height="52" rx="10" fill="#ffffff" fill-opacity=".025" stroke="#ffffff" stroke-opacity=".06"/>
+  <rect x="24" y="448" width="4" height="52" rx="2" fill="#22d3ee"/>
+  <text x="48" y="470" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#22d3ee">Layer 1</text>
+  <text x="48" y="486" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#64748b">Parser</text>
+  <rect x="190" y="454" width="786" height="40" rx="8" fill="#22d3ee" fill-opacity=".1" stroke="#22d3ee" stroke-opacity=".45" stroke-width="1.2"/>
+  <text x="206" y="470" font-family="ui-monospace, 'SFMono-Regular', monospace" font-size="13" font-weight="700" fill="#67e8f9">druid-sql</text>
+  <text x="206" y="484" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">Lexer 80+ tokens · recursive-descent parser · 30 expressions · 30 dialects · Visitor</text>
+
+  <!-- Layer 0 -->
+  <rect x="24" y="520" width="952" height="52" rx="10" fill="#ffffff" fill-opacity=".025" stroke="#ffffff" stroke-opacity=".06"/>
+  <rect x="24" y="520" width="4" height="52" rx="2" fill="#94a3b8"/>
+  <text x="48" y="542" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11" font-weight="700" fill="#94a3b8">Layer 0</text>
+  <text x="48" y="558" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#64748b">Foundation</text>
+  <rect x="190" y="526" width="380" height="40" rx="8" fill="#94a3b8" fill-opacity=".1" stroke="#94a3b8" stroke-opacity=".45" stroke-width="1.2"/>
+  <text x="206" y="542" font-family="ui-monospace, 'SFMono-Regular', monospace" font-size="13" font-weight="700" fill="#cbd5e1">druid-core</text>
+  <text x="206" y="556" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">DruidError · DbType (30 dialects) · DruidConfig</text>
+  <rect x="586" y="526" width="390" height="40" rx="8" fill="#94a3b8" fill-opacity=".1" stroke="#94a3b8" stroke-opacity=".45" stroke-width="1.2"/>
+  <text x="602" y="542" font-family="ui-monospace, 'SFMono-Regular', monospace" font-size="13" font-weight="700" fill="#cbd5e1">druid-util</text>
+  <text x="602" y="556" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10" fill="#94a3b8">SQL detection · strings · AES-256-GCM · time</text>
+
+  <g fill="none" stroke="#2f4f6f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M430 145 l7 8 l7 -8"/>
+    <path d="M700 145 l7 8 l7 -8"/>
+    <path d="M430 217 l7 8 l7 -8"/>
+    <path d="M700 217 l7 8 l7 -8"/>
+    <path d="M430 289 l7 8 l7 -8"/>
+    <path d="M700 289 l7 8 l7 -8"/>
+    <path d="M430 361 l7 8 l7 -8"/>
+    <path d="M700 361 l7 8 l7 -8"/>
+    <path d="M430 433 l7 8 l7 -8"/>
+    <path d="M700 433 l7 8 l7 -8"/>
+    <path d="M430 505 l7 8 l7 -8"/>
+    <path d="M700 505 l7 8 l7 -8"/>
+  </g>
+</svg>

@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
 Disallow: /druid-rust/404.html
+Disallow: /druid-rust/en/404.html
 Sitemap: https://package.erik.xyz/druid-rust/sitemap.xml

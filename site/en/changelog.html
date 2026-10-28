@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Changelog · Druid-Rust</title>
+  <meta name="description" content="Druid-Rust changelog: features, fixes and security changes from 1.1.0 through 1.4.0.">
+  <meta name="theme-color" content="#071420">
+  <meta property="og:title" content="Changelog · Druid-Rust">
+  <meta property="og:description" content="Every release, with the features, fixes and security boundaries it changed.">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://package.erik.xyz/druid-rust/en/changelog.html">
+  <meta property="og:url" content="https://package.erik.xyz/druid-rust/en/changelog.html">
+  <meta property="og:site_name" content="Druid-Rust">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="zh_CN">
+  <meta property="og:image" content="https://package.erik.xyz/druid-rust/assets/en/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Druid-Rust project banner">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Changelog · Druid-Rust">
+  <meta name="twitter:description" content="Features, fixes and security changes from 1.1.0 through 1.4.0.">
+  <meta name="twitter:image" content="https://package.erik.xyz/druid-rust/assets/en/social-preview.png">
+  <meta name="author" content="Erik">
+  <meta name="keywords" content="Druid-Rust changelog,release notes,Rust connection pool">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="applicable-device" content="pc,mobile">
+  <link rel="alternate" hreflang="zh-CN" href="https://package.erik.xyz/druid-rust/changelog.html">
+  <link rel="alternate" hreflang="en" href="https://package.erik.xyz/druid-rust/en/changelog.html">
+  <link rel="alternate" hreflang="x-default" href="https://package.erik.xyz/druid-rust/changelog.html">
+  <link rel="icon" href="/druid-rust/assets/en/mascot.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/druid-rust/assets/css/base.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/pages.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/docs.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/search.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Druid-Rust Changelog",
+    "name": "Changelog · Druid-Rust",
+    "description": "Druid-Rust changelog: features, fixes and security changes from 1.1.0 through 1.4.0.",
+    "inLanguage": "en",
+    "author": { "@type": "Person", "name": "Erik", "url": "https://erik.xyz" },
+    "about": {
+      "@type": "SoftwareApplication",
+      "name": "Druid-Rust",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux, macOS, Windows",
+      "softwareVersion": "1.4.0",
+      "codeRepository": "https://github.com/erikwang2013/druid-rust",
+      "url": "https://package.erik.xyz/druid-rust/en/"
+    },
+    "url": "https://package.erik.xyz/druid-rust/en/changelog.html"
+  }
+  </script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/druid-rust/en/" aria-label="Druid-Rust home">
+        <img src="/druid-rust/assets/en/mascot.svg" width="32" height="32" alt="">
+        <span>Druid<span class="brand-accent">-Rust</span></span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+        <a href="/druid-rust/en/">Home</a>
+        <a href="/druid-rust/en/about.html">About</a>
+        <a href="/druid-rust/en/features.html">Features</a>
+        <a href="/druid-rust/en/changelog.html" class="is-active" aria-current="page">Changelog</a>
+        <a href="/druid-rust/en/install.html">Install</a>
+        <a href="/druid-rust/en/usage.html">Usage</a>
+        <a class="nav-github" href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <div class="header-tools">
+        <button class="search-btn" type="button" aria-label="Search docs" aria-haspopup="dialog">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <span class="search-label">Search</span>
+          <kbd>/</kbd>
+        </button>
+        <a class="lang-switch" href="/druid-rust/changelog.html" hreflang="zh-CN" lang="zh-CN" aria-label="Switch to Chinese">中文</a>
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <div class="top-sentinel" aria-hidden="true"></div>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container page-hero-inner">
+        <div>
+          <p class="eyebrow">Changelog</p>
+          <h1>Every release, written down</h1>
+          <p class="lead">Features, fixes, breaking changes and security boundaries, grouped by version. The full source is CHANGELOG.md.</p>
+        </div>
+        <img class="page-pet" src="/druid-rust/assets/en/pet/knocking.svg" width="120" height="120" alt="Xiao De knocking expression">
+      </div>
+    </section>
+
+    <div class="container docs-layout">
+      <aside class="toc" aria-label="Versions">
+        <h2>Versions</h2>
+        <a href="#v1-4-0">1.4.0</a>
+        <a href="#v1-3-1">1.3.1</a>
+        <a href="#v1-3-0">1.3.0</a>
+        <a href="#v1-2-0">1.2.0</a>
+        <a href="#v1-1-9">1.1.9</a>
+        <a href="#v1-1-8">1.1.8</a>
+        <a href="#v1-1-0">1.1.0</a>
+      </aside>
+
+      <article class="docs-body">
+        <details class="release" id="v1-4-0" open>
+          <summary>v1.4.0 <span class="release-date">2026-10-19</span><span class="tag tag-added">Added</span><span class="tag tag-fixed">Fixed</span></summary>
+          <div class="release-body">
+            <p>Feature release: pet expression forms enter druid-console, alongside fixes for proxy statement hooks, authenticated favicon loading and clippy on the current stable toolchain. Tests grow from 428 to 431.</p>
+            <h3>Added</h3>
+            <ul>
+              <li>12 expression SVGs move into <code>druid-console/assets/pet-expressions/</code> and ship with the crate. New <code>GET /druid/pet/&lt;name&gt;.svg</code> route.</li>
+              <li>The console header switches expression by state: SQL error to angry, slow SQL to depressed, pool exhausted to knocking, no queries yet to cute, healthy to smile.</li>
+              <li>A drift test keeps docs and crate copies byte-identical. Added a GitHub Social Preview image.</li>
+            </ul>
+            <h3>Fixed</h3>
+            <ul>
+              <li>The proxy layer now dispatches <code>statement_created</code>, <code>statement_error</code> and <code>statement_closed</code>, so failed or blocked statements are counted.</li>
+              <li>With authentication enabled, <code>/druid/mascot.svg</code> and <code>/druid/pet/&lt;name&gt;.svg</code> no longer require a Bearer token, so the favicon does not return 401.</li>
+              <li><code>WallProvider::new(..., 0)</code> truly disables caching, matching the PSCache zero-means-disabled semantics.</li>
+              <li>Clippy fixes for Rust 1.99 stable, including the move to <code>Atomic::try_update</code>.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-3-1">
+          <summary>v1.3.1 <span class="release-date">2026-10-01</span><span class="tag tag-security">Security</span><span class="tag tag-fixed">Fixed</span></summary>
+          <div class="release-body">
+            <p>A same-day patch after adversarial validation found five more plaintext credential leaks in config Debug output and one packaging defect.</p>
+            <h3>Security: DruidConfig Debug output</h3>
+            <ul>
+              <li>Parameter values next to userinfo: pick the first <code>@</code> from the right that is not inside a value, and apply the exemption only to the separator.</li>
+              <li>Scheme segment: compare against the <code>SAFE_SCHEME_LABELS</code> allowlist; unknown labels are redacted entirely.</li>
+              <li>Key labels: values still use substring matching in the fail-closed direction, but key names can only echo from an exact allowlist.</li>
+              <li>One rule: every segment is judged, and the judging scope equals the applied scope.</li>
+            </ul>
+            <h3>Packaging and release</h3>
+            <ul>
+              <li>Mascot assets move into the crate, fixing <code>cargo package</code> failures, with a drift test.</li>
+              <li><code>druid-wall</code> and <code>druid-console</code> are published to crates.io for the first time.</li>
+              <li>All ten crates get <code>readme</code> metadata so crates.io shows the project README.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-3-0">
+          <summary>v1.3.0 <span class="release-date">2026-10-01</span><span class="tag tag-breaking">Breaking</span><span class="tag tag-security">Security</span></summary>
+          <div class="release-body">
+            <p>A deep review and three rounds of adversarial validation. The core finding: in 1.2.0 the SQL firewall and statistics never ran on the pool path, because filters had nowhere to attach and PoolGuard exposed only the raw connection.</p>
+            <h3>Breaking changes</h3>
+            <ul>
+              <li>The firewall is fail-closed by default: unparsable or unrecognized statements are rejected. Escape hatch: <code>deny_unparsable = false</code>.</li>
+              <li><code>DruidConfig::filters</code> is not wired; a non-empty value makes <code>init()</code> fail. Use <code>DruidDataSource::with_filters(...)</code>.</li>
+              <li><code>DruidError</code> is <code>#[non_exhaustive]</code>; downstream exhaustive matches need a <code>_ =&gt;</code> arm.</li>
+              <li><code>max_lifetime_ms</code> is now judged by physical creation time. The old last-used time made it ineffective for hot connections.</li>
+              <li>Invalid configs such as <code>initial_size &gt; max_active</code> fail at init through <code>DruidConfig::validate()</code>.</li>
+              <li><code>druid-ha</code> removes the unused <code>NodeStatus::Testing</code>. <code>substitute_params</code> is deprecated in favor of <code>substitute_params_mysql</code>.</li>
+            </ul>
+            <h3>Added</h3>
+            <ul>
+              <li>Construction-time injection: <code>with_filters()</code> and <code>with_chain()</code>, configured before the chain is wrapped in Arc.</li>
+              <li><code>PoolGuard::execute()</code> and <code>query()</code>: the only path where SQL reaches the Filter chain. <code>connection()</code> remains the escape hatch.</li>
+              <li>Five lifecycle hooks that were defined but never dispatched are wired, plus <code>impl Filter for Arc&lt;T&gt;</code>.</li>
+              <li>Console token authentication, constant-time comparison, <code>Cache-Control: no-store</code> and pagination.</li>
+              <li>Wall <code>deny_unparsable</code>, a transaction-control safe channel, and broader DenyOperation classification.</li>
+              <li>Parser support for <code>LIMIT offset, count</code>, <code>@var</code> and <code>EXPLAIN</code>.</li>
+              <li>HA failure/success thresholds, probe timeouts and a stoppable health-check loop.</li>
+            </ul>
+            <h3>Security fixes</h3>
+            <ul>
+              <li>The firewall logged and allowed on parse failure, and quick_check discard denial results. Eight bypasses closed.</li>
+              <li>The function denylist did not recurse into arguments, so <code>COALESCE(SLEEP(5),0)</code> slipped through. It now recurses.</li>
+              <li><code>CREATE TABLE ... DEFAULT (RAND())</code> bypass reproduced on real databases and closed.</li>
+              <li>deny_keywords was blinded by quoting twice. Matching text is rebuilt from the lexer token stream.</li>
+              <li><code>substitute_params</code> backslash injection. Added a MySQL-safe variant.</li>
+              <li>Plaintext credentials in config Debug output. Redaction now works segment by segment.</li>
+              <li>The console exposed raw SQL without authentication. Added a token and loopback guidance.</li>
+              <li>Crypto did not enable the zeroize features, so key material was not cleared on drop.</li>
+            </ul>
+            <h3>Correctness and concurrency</h3>
+            <ul>
+              <li>Cancellation safety: a pending guard is created early, so cancellation does not leak a physical connection.</li>
+              <li>Fixed connections being created after close, distorted return-validation counts, and close not waking waiters.</li>
+              <li>KeepAlive no longer closes connections in use, and shares state semantics with the borrow path.</li>
+              <li>Fixed permits released before the connection returned, which could exceed max_active.</li>
+              <li><code>DruidDataSource</code> now has Drop, so background tasks and idle connections do not leak.</li>
+              <li>HA fixes for stuck nodes, no per-probe timeout, one-failure death, and an unstoppable loop.</li>
+              <li>Statistics fixes for unbounded SQL tables, drifting active/idle counts and printing under lock.</li>
+              <li>Parser fixes for NOT precedence, recursive depth, silent truncation and treating every <code>--</code> as a comment.</li>
+              <li>Formatter fixes for string escaping, lost CREATE TABLE constraints, missing parentheses and literal JOIN output.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-2-0">
+          <summary>v1.2.0 <span class="release-date">2026-09-26</span><span class="tag tag-added">Added</span><span class="tag tag-fixed">Fixed</span></summary>
+          <div class="release-body">
+            <h3>Added</h3>
+            <ul>
+              <li>Xiao De enters the README and console. <code>/druid/mascot.svg</code> also serves as the site favicon.</li>
+              <li>Architecture, feature and connection-lifecycle diagrams, plus mascot and lifecycle sections in the README.</li>
+              <li>The console header inlines the mascot without copying the asset.</li>
+            </ul>
+            <h3>Fixed</h3>
+            <ul>
+              <li>CI green: full rustfmt and clippy cleanup.</li>
+              <li>Release workflow uses <code>gh release create --target</code>, fixing repeated failures on runners without git identity.</li>
+              <li>Test badges and distribution tables update to the measured 231 tests.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-1-9">
+          <summary>v1.1.9 <span class="release-date">2026-08-02</span><span class="tag tag-added">Added</span></summary>
+          <div class="release-body">
+            <ul>
+              <li>CI workflow with check, test, clippy and fmt jobs.</li>
+              <li>LICENSE, CHANGELOG, CONTRIBUTING and payment QR codes in the README.</li>
+              <li>All ten crates get description, keywords and category metadata.</li>
+              <li>Removed unused sqlx, rand and tracing-subscriber dependencies.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-1-8">
+          <summary>v1.1.8 <span class="release-date">2026-08-02</span><span class="tag tag-added">Added</span><span class="tag tag-fixed">Fixed</span></summary>
+          <div class="release-body">
+            <ul>
+              <li>CTE/WITH support in the parser, AST, formatter and visitor.</li>
+              <li>KeepAlive eviction uses an <code>(id, last_used_at)</code> double condition to fix TOCTOU.</li>
+              <li>Cache-hit, waiting, create and destroy counters are complete.</li>
+              <li>The firewall covers GROUP BY, HAVING, ORDER BY, LIMIT, OFFSET and subqueries.</li>
+              <li>PoolGuard is generic over Driver for return validation, and DROP parsing advances correctly.</li>
+              <li>Removed the dead NationalString and Whitespace tokens.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-1-0">
+          <summary>v1.1.0 <span class="release-date">2026-07-31</span><span class="tag tag-added">Initial</span></summary>
+          <div class="release-body">
+            <ul>
+              <li>First release with ten crates.</li>
+              <li>Semaphore-based async pool with eviction, KeepAlive and PSCache.</li>
+              <li>SQL lexer, recursive-descent parser and 30 database dialects.</li>
+              <li>AST-level SQL firewall, slow SQL detection and weighted round-robin HA.</li>
+              <li>axum console, Filter chain architecture and AES-256-GCM helpers.</li>
+              <li>61 unit and integration tests.</li>
+            </ul>
+          </div>
+        </details>
+
+        <p style="margin-top: 28px;">Full source: <a class="text-link" href="https://github.com/erikwang2013/druid-rust/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG.md →</a></p>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/druid-rust/en/">
+          <img src="/druid-rust/assets/en/mascot.svg" width="32" height="32" alt="">
+          <span>Druid<span class="brand-accent">-Rust</span></span>
+        </a>
+        <p>Rust port of Alibaba Druid. Async pooling, SQL parsing, an AST firewall and live metrics in one API.</p>
+        <p class="footer-author">Author <a href="https://erik.xyz" target="_blank" rel="noopener">Erik</a></p>
+        <p class="footer-support">Support <a href="/druid-rust/assets/en/weixinpay.png" data-lightbox data-title="WeChat Pay">WeChat</a><span aria-hidden="true"> / </span><a href="/druid-rust/assets/en/alipay.png" data-lightbox data-title="Alipay">Alipay</a></p>
+      </div>
+      <div class="footer-col">
+        <h2>Docs</h2>
+        <a href="/druid-rust/en/about.html">About</a>
+        <a href="/druid-rust/en/features.html">Features</a>
+        <a href="/druid-rust/en/changelog.html">Changelog</a>
+        <a href="/druid-rust/en/install.html">Install</a>
+        <a href="/druid-rust/en/usage.html">Usage</a>
+      </div>
+      <div class="footer-col">
+        <h2>Resources</h2>
+        <a href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/docs/README_EN.md" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
+        <a href="https://crates.io/crates/druid-pool" target="_blank" rel="noopener">crates.io</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 <a href="https://erik.xyz" target="_blank" rel="noopener">Erik</a> · Apache-2.0</p>
+      <div class="footer-info" id="busuanzi"><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script> <span id="busuanzi_container_page_pv"><span data-i18n="post.readA">Read</span> <b id="busuanzi_value_page_pv">0</b> <span data-i18n="post.readB">times 👀</span></span></div>
+    </div>
+  </footer>
+
+  <a class="to-top" href="#top" aria-label="Back to top">
+    <img src="/druid-rust/assets/en/pet/smile.svg" width="52" height="52" alt="">
+  </a>
+
+  <script defer src="/druid-rust/assets/js/site.js"></script>
+  <script defer src="/druid-rust/assets/js/search.js"></script>
+</body>
+</html>

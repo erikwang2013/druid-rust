@@ -5,7 +5,7 @@
 
 ![Druid-Rust 项目宠物 · 德鲁伊猫头鹰「小德」](docs/assets/mascot.svg)
 
-[English Documentation](docs/README_EN.md) | 中文文档
+[在线站点](https://package.erik.xyz/druid-rust/) | [English Documentation](docs/README_EN.md) | 中文文档
 
 **Druid-Rust** 是 [Alibaba Druid](https://github.com/alibaba/druid) 的 Rust 移植版——将异步连接池、SQL 解析分析、安全防护与监控统计统合为一体，是 Rust 生态中功能最完整的数据库连接池之一。
 

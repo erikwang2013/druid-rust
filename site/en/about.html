@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>About · Druid-Rust</title>
+  <meta name="description" content="Druid-Rust is a Rust port of Alibaba Druid: ten crates, seven layers, async pooling, SQL parsing, an AST firewall and monitoring.">
+  <meta name="theme-color" content="#071420">
+  <meta property="og:title" content="About · Druid-Rust">
+  <meta property="og:description" content="Bringing Druid's capabilities into async Rust.">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://package.erik.xyz/druid-rust/en/about.html">
+  <meta property="og:url" content="https://package.erik.xyz/druid-rust/en/about.html">
+  <meta property="og:site_name" content="Druid-Rust">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="zh_CN">
+  <meta property="og:image" content="https://package.erik.xyz/druid-rust/assets/en/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Druid-Rust project banner">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="About · Druid-Rust">
+  <meta name="twitter:description" content="Bringing Druid's capabilities into async Rust.">
+  <meta name="twitter:image" content="https://package.erik.xyz/druid-rust/assets/en/social-preview.png">
+  <meta name="author" content="Erik">
+  <meta name="keywords" content="Druid-Rust,about,Rust database pool,architecture">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="applicable-device" content="pc,mobile">
+  <link rel="alternate" hreflang="zh-CN" href="https://package.erik.xyz/druid-rust/about.html">
+  <link rel="alternate" hreflang="en" href="https://package.erik.xyz/druid-rust/en/about.html">
+  <link rel="alternate" hreflang="x-default" href="https://package.erik.xyz/druid-rust/about.html">
+  <link rel="icon" href="/druid-rust/assets/en/mascot.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/druid-rust/assets/css/base.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/pages.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/search.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "AboutPage",
+    "name": "About · Druid-Rust",
+    "description": "Druid-Rust is a Rust port of Alibaba Druid: ten crates, seven layers, async pooling, SQL parsing, an AST firewall and monitoring.",
+    "inLanguage": "en",
+    "author": { "@type": "Person", "name": "Erik", "url": "https://erik.xyz" },
+    "about": {
+      "@type": "SoftwareApplication",
+      "name": "Druid-Rust",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux, macOS, Windows",
+      "softwareVersion": "1.4.0",
+      "programmingLanguage": "Rust",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "codeRepository": "https://github.com/erikwang2013/druid-rust",
+      "url": "https://package.erik.xyz/druid-rust/en/"
+    },
+    "url": "https://package.erik.xyz/druid-rust/en/about.html"
+  }
+  </script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/druid-rust/en/" aria-label="Druid-Rust home">
+        <img src="/druid-rust/assets/en/mascot.svg" width="32" height="32" alt="">
+        <span>Druid<span class="brand-accent">-Rust</span></span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+        <a href="/druid-rust/en/">Home</a>
+        <a href="/druid-rust/en/about.html" class="is-active" aria-current="page">About</a>
+        <a href="/druid-rust/en/features.html">Features</a>
+        <a href="/druid-rust/en/changelog.html">Changelog</a>
+        <a href="/druid-rust/en/install.html">Install</a>
+        <a href="/druid-rust/en/usage.html">Usage</a>
+        <a class="nav-github" href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <div class="header-tools">
+        <button class="search-btn" type="button" aria-label="Search docs" aria-haspopup="dialog">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <span class="search-label">Search</span>
+          <kbd>/</kbd>
+        </button>
+        <a class="lang-switch" href="/druid-rust/about.html" hreflang="zh-CN" lang="zh-CN" aria-label="Switch to Chinese">中文</a>
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <div class="top-sentinel" aria-hidden="true"></div>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container page-hero-inner">
+        <div>
+          <p class="eyebrow">About</p>
+          <h1>Bringing Druid's capabilities<br>into async Rust</h1>
+          <p class="lead">A Rust port of Alibaba Druid, rebuilt around traits and tokio while keeping the core ideas.</p>
+        </div>
+        <img class="page-pet" src="/druid-rust/assets/en/pet/cute.svg" width="120" height="120" alt="Xiao De cute expression">
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>What it is</h2>
+        </div>
+        <p class="lead" style="margin-bottom: 16px;">Druid-Rust rewrites the connection pooling, SQL parsing, firewall and monitoring ideas proven in the Java ecosystem as a set of Rust crates. No JVM, no DI container and no ORM wrapper: connections, SQL and metrics are exposed through explicit structs and traits.</p>
+        <p class="lead" style="margin-bottom: 16px;">The project is split into ten crates. Use <code>druid-pool</code> on its own for pooling, or put <code>druid-wall</code> and <code>druid-stat</code> into the Filter chain for security and observability.</p>
+        <p class="lead" style="margin-bottom: 32px;">Code is Apache-2.0. The mascot and visual assets are copyright the author and require a commercial license for commercial use.</p>
+        <figure class="figure">
+          <img src="/druid-rust/assets/en/social-preview.png" width="1280" height="640" alt="Druid-Rust project banner with Xiao De standing on a connection pool" loading="lazy" decoding="async">
+          <figcaption>Project banner: Xiao De standing on the pool</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Four design principles</h2>
+          <p>Not a line-by-line translation of Java class hierarchy: keep the problem, choose the Rust solution.</p>
+        </div>
+        <div class="principle-grid">
+          <article class="principle">
+            <h3>Async first</h3>
+            <p>Tokio-based async I/O, Semaphore concurrency control, and background eviction and KeepAlive tasks.</p>
+          </article>
+          <article class="principle">
+            <h3>Composition over inheritance</h3>
+            <p>The Java class hierarchy becomes trait and struct composition. The Filter trait exposes lifecycle hooks with no-op defaults.</p>
+          </article>
+          <article class="principle">
+            <h3>Type safety</h3>
+            <p>The DbType enum covers 30 database dialects, while SQL statements and expressions are algebraic data types.</p>
+          </article>
+          <article class="principle">
+            <h3>Zero-cost abstraction</h3>
+            <p>AOT-compiled native code, PoolGuard RAII return, no JIT warmup and no runtime container.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Layers and connection lifecycle</h2>
+          <p>Dependencies point one way, and every connection state has a clear owner.</p>
+        </div>
+        <figure class="figure">
+          <img src="/druid-rust/assets/en/architecture.svg" width="1000" height="620" alt="Druid-Rust seven-layer architecture diagram" loading="lazy" decoding="async">
+          <figcaption>Seven layers: ten crates, one-way dependencies</figcaption>
+        </figure>
+        <figure class="figure">
+          <img src="/druid-rust/assets/en/lifecycle.svg" width="1000" height="540" alt="Druid-Rust connection lifecycle diagram: create, idle, active, validate and destroy" loading="lazy" decoding="async">
+          <figcaption>Connection lifecycle: borrow, validate, return, evict and KeepAlive</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Seven layers, ten crates</h2>
+          <p>Each layer has one job. Lower layers never need to know that upper layers exist.</p>
+        </div>
+        <div class="layer-list">
+          <div class="layer-row"><span class="layer-num">Layer 6</span><span class="layer-crate">druid-console</span><p>axum HTTP dashboard and JSON endpoints, with Xiao De changing expression by pool status.</p></div>
+          <div class="layer-row"><span class="layer-num">Layer 5</span><span class="layer-crate">druid-ha<br>druid-proxy</span><p>Weighted round-robin, health checks, failover and Filter-aware proxy wrappers.</p></div>
+          <div class="layer-row"><span class="layer-num">Layer 4</span><span class="layer-crate">druid-pool</span><p>Pool core: concurrency control, automatic return, idle eviction, KeepAlive and PSCache containers.</p></div>
+          <div class="layer-row"><span class="layer-num">Layer 3</span><span class="layer-crate">druid-wall<br>druid-stat</span><p>AST-level SQL firewall and SQL execution statistics, attached through the Filter chain.</p></div>
+          <div class="layer-row"><span class="layer-num">Layer 2</span><span class="layer-crate">druid-filter</span><p>Filter trait, no-op adapter, responsibility chain and manager for lifecycle events.</p></div>
+          <div class="layer-row"><span class="layer-num">Layer 1</span><span class="layer-crate">druid-sql</span><p>Lexer, recursive-descent parser, AST, formatter and schema visitor.</p></div>
+          <div class="layer-row"><span class="layer-num">Layer 0</span><span class="layer-crate">druid-core<br>druid-util</span><p>Errors, configuration and the 30-dialect enum, plus SQL detection, strings, crypto and time helpers.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section pet-section reveal" id="pet">
+      <div class="container">
+        <div class="section-head">
+          <h2>Xiao De, an owl guarding the pool</h2>
+          <p>Never sleeping maps to monitoring, the druid hood maps to security, and standing on the pool maps to pooling itself. Its 12 expressions appear in the console header and switch with the current state.</p>
+        </div>
+        <ul class="pet-strip pet-grid">
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/smile.svg" width="76" height="76" alt="Xiao De smile expression" loading="lazy"><b>Smile</b><span>smile</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/joy.svg" width="76" height="76" alt="Xiao De joy expression" loading="lazy"><b>Joy</b><span>joy</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/cry.svg" width="76" height="76" alt="Xiao De cry expression" loading="lazy"><b>Cry</b><span>cry</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/depressed.svg" width="76" height="76" alt="Xiao De depressed expression" loading="lazy"><b>Depressed</b><span>depressed</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/terrified.svg" width="76" height="76" alt="Xiao De terrified expression" loading="lazy"><b>Terrified</b><span>terrified</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/angry.svg" width="76" height="76" alt="Xiao De angry expression" loading="lazy"><b>Angry</b><span>angry</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/coquettish.svg" width="76" height="76" alt="Xiao De coquettish expression" loading="lazy"><b>Coquettish</b><span>coquettish</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/cute.svg" width="76" height="76" alt="Xiao De cute expression" loading="lazy"><b>Cute</b><span>cute</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/pleasing.svg" width="76" height="76" alt="Xiao De pleasing expression" loading="lazy"><b>Pleasing</b><span>pleasing</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/knocking.svg" width="76" height="76" alt="Xiao De knocking expression" loading="lazy"><b>Knocking</b><span>knocking</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/facepalm.svg" width="76" height="76" alt="Xiao De facepalm expression" loading="lazy"><b>Facepalm</b><span>facepalm</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/en/pet/tongue.svg" width="76" height="76" alt="Xiao De tongue expression" loading="lazy"><b>Tongue</b><span>tongue</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>About the author and support</h2>
+          <p>Druid-Rust is maintained by <a class="text-link" href="https://erik.xyz" target="_blank" rel="noopener">Erik</a>. If the project helps you, you can buy the developer a coffee.</p>
+        </div>
+        <div class="principle-grid">
+          <div class="principle">
+            <img src="/druid-rust/assets/en/alipay.png" width="180" height="197" alt="Alipay donation QR code" loading="lazy" style="width: 180px; border-radius: 8px;">
+            <p style="margin-top: 10px;">Alipay</p>
+          </div>
+          <div class="principle">
+            <img src="/druid-rust/assets/en/weixinpay.png" width="180" height="197" alt="WeChat Pay donation QR code" loading="lazy" style="width: 180px; border-radius: 8px;">
+            <p style="margin-top: 10px;">WeChat Pay</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/druid-rust/en/">
+          <img src="/druid-rust/assets/en/mascot.svg" width="32" height="32" alt="">
+          <span>Druid<span class="brand-accent">-Rust</span></span>
+        </a>
+        <p>Rust port of Alibaba Druid. Async pooling, SQL parsing, an AST firewall and live metrics in one API.</p>
+        <p class="footer-author">Author <a href="https://erik.xyz" target="_blank" rel="noopener">Erik</a></p>
+        <p class="footer-support">Support <a href="/druid-rust/assets/en/weixinpay.png" data-lightbox data-title="WeChat Pay">WeChat</a><span aria-hidden="true"> / </span><a href="/druid-rust/assets/en/alipay.png" data-lightbox data-title="Alipay">Alipay</a></p>
+      </div>
+      <div class="footer-col">
+        <h2>Docs</h2>
+        <a href="/druid-rust/en/about.html">About</a>
+        <a href="/druid-rust/en/features.html">Features</a>
+        <a href="/druid-rust/en/changelog.html">Changelog</a>
+        <a href="/druid-rust/en/install.html">Install</a>
+        <a href="/druid-rust/en/usage.html">Usage</a>
+      </div>
+      <div class="footer-col">
+        <h2>Resources</h2>
+        <a href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/docs/README_EN.md" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
+        <a href="https://crates.io/crates/druid-pool" target="_blank" rel="noopener">crates.io</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 <a href="https://erik.xyz" target="_blank" rel="noopener">Erik</a> · Apache-2.0</p>
+      <div class="footer-info" id="busuanzi"><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script> <span id="busuanzi_container_page_pv"><span data-i18n="post.readA">Read</span> <b id="busuanzi_value_page_pv">0</b> <span data-i18n="post.readB">times 👀</span></span></div>
+    </div>
+  </footer>
+
+  <a class="to-top" href="#top" aria-label="Back to top">
+    <img src="/druid-rust/assets/en/pet/smile.svg" width="52" height="52" alt="">
+  </a>
+
+  <script defer src="/druid-rust/assets/js/site.js"></script>
+  <script defer src="/druid-rust/assets/js/search.js"></script>
+</body>
+</html>

@@ -4,6 +4,28 @@
   document.documentElement.classList.add('js');
 
   var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var isEnglish = (document.documentElement.lang || '').toLowerCase().indexOf('en') === 0;
+  var ui = isEnglish ? {
+    openMenu: 'Open menu',
+    closeMenu: 'Close menu',
+    copied: 'Copied',
+    preview: 'Image preview',
+    zoomHint: 'Use + / − to zoom, Esc to close',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    resetZoom: 'Reset zoom',
+    closePreview: 'Close preview'
+  } : {
+    openMenu: '打开导航',
+    closeMenu: '关闭导航',
+    copied: '已复制',
+    preview: '图片预览',
+    zoomHint: '使用 + / − 缩放，Esc 关闭',
+    zoomIn: '放大',
+    zoomOut: '缩小',
+    resetZoom: '重置缩放',
+    closePreview: '关闭预览'
+  };
 
   /* Mobile navigation */
   var toggle = document.querySelector('.nav-toggle');
@@ -12,7 +34,7 @@
     var setNav = function (open) {
       nav.classList.toggle('is-open', open);
       toggle.setAttribute('aria-expanded', String(open));
-      toggle.setAttribute('aria-label', open ? '关闭导航' : '打开导航');
+      toggle.setAttribute('aria-label', open ? ui.closeMenu : ui.openMenu);
     };
     toggle.addEventListener('click', function () {
       setNav(!nav.classList.contains('is-open'));
@@ -40,7 +62,7 @@
       var text = code.innerText;
       var done = function () {
         var original = button.textContent;
-        button.textContent = '已复制';
+        button.textContent = ui.copied;
         window.setTimeout(function () { button.textContent = original; }, 1600);
       };
       var fallback = function () {
@@ -74,18 +96,18 @@
     if (lightbox) return;
     lightbox = document.createElement('dialog');
     lightbox.className = 'lightbox';
-    lightbox.setAttribute('aria-label', '图片预览');
+    lightbox.setAttribute('aria-label', ui.preview);
     lightbox.innerHTML =
       '<div class="lb-shell">' +
         '<div class="lb-bar">' +
           '<span class="lb-title"></span>' +
-          '<button class="lb-btn lb-zoom-out" type="button" aria-label="缩小">−</button>' +
-          '<button class="lb-btn lb-reset" type="button" aria-label="重置缩放">1:1</button>' +
-          '<button class="lb-btn lb-zoom-in" type="button" aria-label="放大">+</button>' +
-          '<button class="lb-btn lb-close" type="button" aria-label="关闭预览">×</button>' +
+          '<button class="lb-btn lb-zoom-out" type="button" aria-label="' + ui.zoomOut + '">−</button>' +
+          '<button class="lb-btn lb-reset" type="button" aria-label="' + ui.resetZoom + '">1:1</button>' +
+          '<button class="lb-btn lb-zoom-in" type="button" aria-label="' + ui.zoomIn + '">+</button>' +
+          '<button class="lb-btn lb-close" type="button" aria-label="' + ui.closePreview + '">×</button>' +
         '</div>' +
         '<div class="lb-stage"><img alt=""></div>' +
-        '<div class="lb-hint">使用 + / − 缩放，Esc 关闭</div>' +
+        '<div class="lb-hint">' + ui.zoomHint + '</div>' +
       '</div>';
     document.body.appendChild(lightbox);
     lbTitle = lightbox.querySelector('.lb-title');
@@ -148,8 +170,8 @@
     if (!src) return;
     if (!lightbox) buildLightbox();
     if (typeof lightbox.showModal !== 'function') return;
-    lbTitle.textContent = title || '图片预览';
-    lbImage.alt = title || '图片预览';
+    lbTitle.textContent = title || ui.preview;
+    lbImage.alt = title || ui.preview;
     lbImage.style.width = '';
     baseWidth = 0;
     zoom = 1;
@@ -171,7 +193,7 @@
       link.className = 'zoom-link';
       link.href = img.getAttribute('src');
       link.setAttribute('data-lightbox', '');
-      link.setAttribute('data-title', img.alt || '图片预览');
+      link.setAttribute('data-title', img.alt || ui.preview);
       img.parentNode.insertBefore(link, img);
       link.appendChild(img);
     });

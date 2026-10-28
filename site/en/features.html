@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Feature Evolution · Druid-Rust</title>
+  <meta name="description" content="Druid-Rust capabilities and version evolution: pooling, SQL parsing, firewall, monitoring, high availability and console.">
+  <meta name="theme-color" content="#071420">
+  <meta property="og:title" content="Feature Evolution · Druid-Rust">
+  <meta property="og:description" content="From ten crates to a wired Filter chain, see how Druid-Rust grew version by version.">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://package.erik.xyz/druid-rust/en/features.html">
+  <meta property="og:url" content="https://package.erik.xyz/druid-rust/en/features.html">
+  <meta property="og:site_name" content="Druid-Rust">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="zh_CN">
+  <meta property="og:image" content="https://package.erik.xyz/druid-rust/assets/en/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Druid-Rust project banner">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Feature Evolution · Druid-Rust">
+  <meta name="twitter:description" content="From ten crates to a wired Filter chain.">
+  <meta name="twitter:image" content="https://package.erik.xyz/druid-rust/assets/en/social-preview.png">
+  <meta name="author" content="Erik">
+  <meta name="keywords" content="Druid-Rust,feature evolution,connection pool,SQL firewall,monitoring">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="applicable-device" content="pc,mobile">
+  <link rel="alternate" hreflang="zh-CN" href="https://package.erik.xyz/druid-rust/features.html">
+  <link rel="alternate" hreflang="en" href="https://package.erik.xyz/druid-rust/en/features.html">
+  <link rel="alternate" hreflang="x-default" href="https://package.erik.xyz/druid-rust/features.html">
+  <link rel="icon" href="/druid-rust/assets/en/mascot.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/druid-rust/assets/css/base.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/pages.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/docs.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/search.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Feature Evolution · Druid-Rust",
+    "description": "Druid-Rust capabilities and version evolution: pooling, SQL parsing, firewall, monitoring, high availability and console.",
+    "inLanguage": "en",
+    "author": { "@type": "Person", "name": "Erik", "url": "https://erik.xyz" },
+    "about": {
+      "@type": "SoftwareApplication",
+      "name": "Druid-Rust",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux, macOS, Windows",
+      "softwareVersion": "1.4.0",
+      "codeRepository": "https://github.com/erikwang2013/druid-rust",
+      "url": "https://package.erik.xyz/druid-rust/en/"
+    },
+    "url": "https://package.erik.xyz/druid-rust/en/features.html"
+  }
+  </script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/druid-rust/en/" aria-label="Druid-Rust home">
+        <img src="/druid-rust/assets/en/mascot.svg" width="32" height="32" alt="">
+        <span>Druid<span class="brand-accent">-Rust</span></span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+        <a href="/druid-rust/en/">Home</a>
+        <a href="/druid-rust/en/about.html">About</a>
+        <a href="/druid-rust/en/features.html" class="is-active" aria-current="page">Features</a>
+        <a href="/druid-rust/en/changelog.html">Changelog</a>
+        <a href="/druid-rust/en/install.html">Install</a>
+        <a href="/druid-rust/en/usage.html">Usage</a>
+        <a class="nav-github" href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <div class="header-tools">
+        <button class="search-btn" type="button" aria-label="Search docs" aria-haspopup="dialog">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <span class="search-label">Search</span>
+          <kbd>/</kbd>
+        </button>
+        <a class="lang-switch" href="/druid-rust/features.html" hreflang="zh-CN" lang="zh-CN" aria-label="Switch to Chinese">中文</a>
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <div class="top-sentinel" aria-hidden="true"></div>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container page-hero-inner">
+        <div>
+          <p class="eyebrow">Feature evolution</p>
+          <h1>Capabilities are built one version at a time</h1>
+          <p class="lead">From the first ten crates to a wired Filter chain, then Xiao De's expressions in the console. Every step belongs to a release.</p>
+        </div>
+        <img class="page-pet" src="/druid-rust/assets/en/pet/joy.svg" width="120" height="120" alt="Xiao De joy expression">
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Six capabilities today</h2>
+          <p>The pool is the core. The Filter chain extends it with security and observability. Every crate is usable on its own.</p>
+        </div>
+        <figure class="figure">
+          <img src="/druid-rust/assets/en/features.svg" width="1000" height="620" alt="Druid-Rust feature map: connection pool, SQL parser, firewall, monitoring, pluggable filters, high availability and proxy" loading="lazy" decoding="async">
+          <figcaption>Six capability domains: pool at the core, Filter chain for extension</figcaption>
+        </figure>
+        <div class="domain-grid" style="margin-top: 20px;">
+          <article class="domain-card">
+            <h3>druid-pool</h3>
+            <p class="domain-name">Async connection pool</p>
+            <p>Semaphore concurrency control, PoolGuard return on drop, and background eviction and KeepAlive.</p>
+            <ul class="mini-list"><li>warm-up</li><li>borrow timeout</li><li>validation</li><li>KeepAlive</li><li>PSCache</li></ul>
+          </article>
+          <article class="domain-card">
+            <h3>druid-sql</h3>
+            <p class="domain-name">SQL parser</p>
+            <p>From the lexer to a recursive-descent parser, AST and schema extraction, feeding the firewall and formatter.</p>
+            <ul class="mini-list"><li>80+ tokens</li><li>22 expressions</li><li>30 dialects</li><li>SchemaVisitor</li></ul>
+          </article>
+          <article class="domain-card">
+            <h3>druid-wall</h3>
+            <p class="domain-name">SQL firewall</p>
+            <p>AST-level checks for dangerous operations, functions and statement shapes. Fail-closed by default.</p>
+            <ul class="mini-list"><li>required WHERE</li><li>multi-statement</li><li>file writes</li><li>512-entry cache</li></ul>
+          </article>
+          <article class="domain-card">
+            <h3>druid-stat</h3>
+            <p class="domain-name">Monitoring</p>
+            <p>Per-SQL count, latency, max latency and errors, with slow SQL alerts and lock-free metrics.</p>
+            <ul class="mini-list"><li>slow SQL</li><li>PoolMetrics</li><li>StatFilter</li><li>Prometheus ready</li></ul>
+          </article>
+          <article class="domain-card">
+            <h3>druid-ha</h3>
+            <p class="domain-name">High availability and proxy</p>
+            <p>Weighted round-robin sources, async health checks, and threshold-based failover to avoid flapping.</p>
+            <ul class="mini-list"><li>failover</li><li>health checks</li><li>mark_down</li><li>ProxyStatement</li></ul>
+          </article>
+          <article class="domain-card">
+            <h3>druid-console</h3>
+            <p class="domain-name">Web console</p>
+            <p>An axum dashboard and JSON endpoints with Bearer token support and Xiao De expressions by status.</p>
+            <ul class="mini-list"><li>/druid/stat.json</li><li>/druid/sql.json</li><li>slow SQL API</li><li>12 expressions</li></ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="timeline">
+      <div class="container">
+        <div class="section-head">
+          <h2>Version evolution</h2>
+          <p>What each release changed. The full itemized history lives in the changelog.</p>
+        </div>
+        <div class="timeline">
+          <article class="timeline-item">
+            <div class="timeline-meta">
+              <span class="version-pill">v1.1.0</span>
+              <span class="timeline-date">2026-07-31</span>
+              <img class="timeline-pet" src="/druid-rust/assets/en/pet/joy.svg" width="40" height="40" alt="" loading="lazy">
+            </div>
+            <h3>Ten pieces in place</h3>
+            <p>First release with ten crates: async pool, SQL parser, firewall, statistics, HA and console. 61 tests.</p>
+          </article>
+          <article class="timeline-item">
+            <div class="timeline-meta">
+              <span class="version-pill">v1.1.8</span>
+              <span class="timeline-date">2026-08-02</span>
+              <img class="timeline-pet" src="/druid-rust/assets/en/pet/pleasing.svg" width="40" height="40" alt="" loading="lazy">
+            </div>
+            <h3>Parser and lifecycle hardening</h3>
+            <p>CTE/WITH support, a KeepAlive TOCTOU fix, more accurate create, destroy and waiting metrics, and broader firewall clause coverage.</p>
+          </article>
+          <article class="timeline-item">
+            <div class="timeline-meta">
+              <span class="version-pill">v1.1.9</span>
+              <span class="timeline-date">2026-08-02</span>
+              <img class="timeline-pet" src="/druid-rust/assets/en/pet/smile.svg" width="40" height="40" alt="" loading="lazy">
+            </div>
+            <h3>Engineering baseline</h3>
+            <p>CI, LICENSE, CHANGELOG and CONTRIBUTING, plus crate metadata and a dependency cleanup.</p>
+          </article>
+          <article class="timeline-item">
+            <div class="timeline-meta">
+              <span class="version-pill">v1.2.0</span>
+              <span class="timeline-date">2026-09-26</span>
+              <img class="timeline-pet" src="/druid-rust/assets/en/pet/cute.svg" width="40" height="40" alt="" loading="lazy">
+            </div>
+            <h3>Xiao De arrives</h3>
+            <p>The mascot enters the README and console, with architecture, feature and lifecycle diagrams. Tests grow from 61 to 231.</p>
+          </article>
+          <article class="timeline-item">
+            <div class="timeline-meta">
+              <span class="version-pill">v1.3.0</span>
+              <span class="timeline-date">2026-10-01</span>
+              <img class="timeline-pet" src="/druid-rust/assets/en/pet/angry.svg" width="40" height="40" alt="" loading="lazy">
+            </div>
+            <h3>Wire the Filter chain</h3>
+            <p>A deep review found that the SQL firewall and statistics never ran on the pool path. This release adds construction-time filters and PoolGuard execute/query, makes the firewall fail-closed, and fixes 11 security and concurrency defects.</p>
+          </article>
+          <article class="timeline-item">
+            <div class="timeline-meta">
+              <span class="version-pill">v1.3.1</span>
+              <span class="timeline-date">2026-10-01</span>
+              <img class="timeline-pet" src="/druid-rust/assets/en/pet/facepalm.svg" width="40" height="40" alt="" loading="lazy">
+            </div>
+            <h3>Boundaries</h3>
+            <p>Three more config Debug redaction edges, mascot assets moved into the crate for packaging, and the first crates.io release for druid-wall and druid-console.</p>
+          </article>
+          <article class="timeline-item">
+            <div class="timeline-meta">
+              <span class="version-pill">v1.4.0</span>
+              <span class="timeline-date">2026-10-19</span>
+              <img class="timeline-pet" src="/druid-rust/assets/en/pet/joy.svg" width="40" height="40" alt="" loading="lazy">
+            </div>
+            <h3>Expressions and details</h3>
+            <p>12 pet expressions in the console, proxy statement lifecycle hooks, authenticated favicon loading, and 431 tests.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="container">
+        <div class="section-head">
+          <h2>Known boundaries</h2>
+          <p>Some limits are deliberate security trade-offs, documented in code and docs.</p>
+        </div>
+        <div class="note">
+          <strong>Firewall direction:</strong> UNION, SHOW, USE and SET remain denied. USE tears down schema restrictions and SET changes the parsing semantics of later statements, which a stateless text firewall cannot safely allow.
+        </div>
+        <div class="note">
+          <strong>Prefer false positives:</strong> quoted identifiers contribute their inner text to matching, which can over-report under the default sql_mode. The direction is to block suspicious input, not to let it through.
+        </div>
+        <div class="note">
+          <strong>Validation timeout:</strong> <code>test_on_return</code> has no timeout when <code>validation_query_timeout_secs = 0</code> (the default). A network black hole can hold a concurrency permit for a long time.
+        </div>
+        <div class="note">
+          <strong>Parser:</strong> table-level <code>PRIMARY KEY (id)</code> and <code>EXPLAIN FORMAT=JSON|TREE</code> are not parsed yet.
+        </div>
+        <p style="margin-top: 24px;"><a class="text-link" href="/druid-rust/en/changelog.html">View the full changelog →</a></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/druid-rust/en/">
+          <img src="/druid-rust/assets/en/mascot.svg" width="32" height="32" alt="">
+          <span>Druid<span class="brand-accent">-Rust</span></span>
+        </a>
+        <p>Rust port of Alibaba Druid. Async pooling, SQL parsing, an AST firewall and live metrics in one API.</p>
+        <p class="footer-author">Author <a href="https://erik.xyz" target="_blank" rel="noopener">Erik</a></p>
+        <p class="footer-support">Support <a href="/druid-rust/assets/en/weixinpay.png" data-lightbox data-title="WeChat Pay">WeChat</a><span aria-hidden="true"> / </span><a href="/druid-rust/assets/en/alipay.png" data-lightbox data-title="Alipay">Alipay</a></p>
+      </div>
+      <div class="footer-col">
+        <h2>Docs</h2>
+        <a href="/druid-rust/en/about.html">About</a>
+        <a href="/druid-rust/en/features.html">Features</a>
+        <a href="/druid-rust/en/changelog.html">Changelog</a>
+        <a href="/druid-rust/en/install.html">Install</a>
+        <a href="/druid-rust/en/usage.html">Usage</a>
+      </div>
+      <div class="footer-col">
+        <h2>Resources</h2>
+        <a href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/docs/README_EN.md" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
+        <a href="https://crates.io/crates/druid-pool" target="_blank" rel="noopener">crates.io</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 <a href="https://erik.xyz" target="_blank" rel="noopener">Erik</a> · Apache-2.0</p>
+      <div class="footer-info" id="busuanzi"><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script> <span id="busuanzi_container_page_pv"><span data-i18n="post.readA">Read</span> <b id="busuanzi_value_page_pv">0</b> <span data-i18n="post.readB">times 👀</span></span></div>
+    </div>
+  </footer>
+
+  <a class="to-top" href="#top" aria-label="Back to top">
+    <img src="/druid-rust/assets/en/pet/smile.svg" width="52" height="52" alt="">
+  </a>
+
+  <script defer src="/druid-rust/assets/js/site.js"></script>
+  <script defer src="/druid-rust/assets/js/search.js"></script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Install · Druid-Rust</title>
+  <meta name="description" content="Install Druid-Rust: requirements, Cargo dependencies, a minimal example, building from source and troubleshooting.">
+  <meta name="theme-color" content="#071420">
+  <meta property="og:title" content="Install · Druid-Rust">
+  <meta property="og:description" content="From Cargo dependencies to a source build, install Druid-Rust in three steps.">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://package.erik.xyz/druid-rust/en/install.html">
+  <meta property="og:url" content="https://package.erik.xyz/druid-rust/en/install.html">
+  <meta property="og:site_name" content="Druid-Rust">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="zh_CN">
+  <meta property="og:image" content="https://package.erik.xyz/druid-rust/assets/en/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Druid-Rust project banner">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Install · Druid-Rust">
+  <meta name="twitter:description" content="Install Druid-Rust from Cargo or build the workspace from source.">
+  <meta name="twitter:image" content="https://package.erik.xyz/druid-rust/assets/en/social-preview.png">
+  <meta name="author" content="Erik">
+  <meta name="keywords" content="Druid-Rust install,Cargo dependency,Rust connection pool,quick start">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="applicable-device" content="pc,mobile">
+  <link rel="alternate" hreflang="zh-CN" href="https://package.erik.xyz/druid-rust/install.html">
+  <link rel="alternate" hreflang="en" href="https://package.erik.xyz/druid-rust/en/install.html">
+  <link rel="alternate" hreflang="x-default" href="https://package.erik.xyz/druid-rust/install.html">
+  <link rel="icon" href="/druid-rust/assets/en/mascot.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/druid-rust/assets/css/base.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/pages.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/docs.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/search.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Install Druid-Rust",
+    "name": "Install · Druid-Rust",
+    "description": "Install Druid-Rust: requirements, Cargo dependencies, a minimal example, building from source and troubleshooting.",
+    "inLanguage": "en",
+    "author": { "@type": "Person", "name": "Erik", "url": "https://erik.xyz" },
+    "about": {
+      "@type": "SoftwareApplication",
+      "name": "Druid-Rust",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux, macOS, Windows",
+      "softwareVersion": "1.4.0",
+      "codeRepository": "https://github.com/erikwang2013/druid-rust",
+      "url": "https://package.erik.xyz/druid-rust/en/"
+    },
+    "url": "https://package.erik.xyz/druid-rust/en/install.html"
+  }
+  </script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/druid-rust/en/" aria-label="Druid-Rust home">
+        <img src="/druid-rust/assets/en/mascot.svg" width="32" height="32" alt="">
+        <span>Druid<span class="brand-accent">-Rust</span></span>
+      </a>
+      <nav class="site-nav" id="site-nav" aria-label="Main navigation">
+        <a href="/druid-rust/en/">Home</a>
+        <a href="/druid-rust/en/about.html">About</a>
+        <a href="/druid-rust/en/features.html">Features</a>
+        <a href="/druid-rust/en/changelog.html">Changelog</a>
+        <a href="/druid-rust/en/install.html" class="is-active" aria-current="page">Install</a>
+        <a href="/druid-rust/en/usage.html">Usage</a>
+        <a class="nav-github" href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+      <div class="header-tools">
+        <button class="search-btn" type="button" aria-label="Search docs" aria-haspopup="dialog">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <span class="search-label">Search</span>
+          <kbd>/</kbd>
+        </button>
+        <a class="lang-switch" href="/druid-rust/install.html" hreflang="zh-CN" lang="zh-CN" aria-label="Switch to Chinese">中文</a>
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+  <div class="top-sentinel" aria-hidden="true"></div>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container page-hero-inner">
+        <div>
+          <p class="eyebrow">Install</p>
+          <h1>Put the pool into your project</h1>
+          <p class="lead">Druid-Rust is a Rust workspace. Use the core crate alone, or combine pooling, firewall, statistics and the console.</p>
+        </div>
+        <img class="page-pet" src="/druid-rust/assets/en/pet/pleasing.svg" width="120" height="120" alt="Xiao De pleasing expression">
+      </div>
+    </section>
+
+    <div class="container docs-layout">
+      <aside class="toc" aria-label="On this page">
+        <h2>Contents</h2>
+        <a href="#requirements">Requirements</a>
+        <a href="#dependencies">Dependencies</a>
+        <a href="#minimal">Minimal example</a>
+        <a href="#source">Build from source</a>
+        <a href="#verify">Verify</a>
+        <a href="#faq">FAQ</a>
+        <a href="#next">Next steps</a>
+      </aside>
+
+      <article class="docs-body">
+        <div class="note tip">
+          <strong>Current version:</strong> 1.4.0 · 431 tests passing · Apache-2.0. Dependency examples use version 1.4.
+        </div>
+
+        <h2 id="requirements">Requirements</h2>
+        <ul>
+          <li>Rust stable, edition 2021.</li>
+          <li>The tokio async runtime. Examples use <code>features = ["full"]</code>.</li>
+          <li>A database and a driver adapter implementing the <code>Driver</code> and <code>Connection</code> traits. The project does not bundle a database driver.</li>
+        </ul>
+        <p>If you only need the SQL parser or firewall, add that crate alone and skip the pool.</p>
+
+        <h2 id="dependencies">Dependencies</h2>
+        <p>Add the crates you need to <code>Cargo.toml</code>. The minimal combination is <code>druid-core</code> plus <code>druid-pool</code>.</p>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">Cargo.toml</span>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
+          <pre><code><span class="c"># Version 1.4</span>
+[dependencies]
+druid-core = "1.4"
+druid-pool = "1.4"
+druid-wall = "1.4"
+druid-stat = "1.4"
+tokio = { version = "1", features = ["full"] }</code></pre>
+        </div>
+        <p>Or use cargo add:</p>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">Terminal</span>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
+          <pre><code>cargo add druid-core druid-pool druid-wall druid-stat
+cargo add tokio --features full</code></pre>
+        </div>
+
+        <h2 id="minimal">Minimal example</h2>
+        <p>Create a data source, warm up connections, borrow a guard and let drop return it. Replace <code>your_driver</code> with your driver implementation.</p>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">src/main.rs</span>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
+          <pre><code><span class="k">use</span> druid_core::DruidConfig;
+<span class="k">use</span> druid_pool::DruidDataSource;
+
+#[tokio::main]
+<span class="k">async fn</span> main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    <span class="k">let mut</span> config = DruidConfig::new(
+        <span class="s">"mysql://localhost:3306/mydb"</span>,
+        <span class="s">"root"</span>,
+        <span class="s">"password"</span>,
+    );
+    config.initial_size = 5;
+    config.max_active = 20;
+    config.min_idle = 3;
+
+    <span class="c">// your_driver must implement druid_pool::Driver</span>
+    <span class="k">let</span> ds = DruidDataSource::new(your_driver, config);
+    ds.init().<span class="k">await</span>?;
+
+    <span class="k">let</span> guard = ds.get_connection().<span class="k">await</span>?;
+    <span class="c">// Use guard.execute() / guard.query() so filters run</span>
+    <span class="k">drop</span>(guard); <span class="c">// returned automatically</span>
+
+    ds.close().<span class="k">await</span>?;
+    Ok(())
+}</code></pre>
+        </div>
+        <div class="note">
+          <strong>Note:</strong> <code>guard.connection()</code> is the escape hatch that bypasses filters. SQL through it skips both the firewall and statistics.
+        </div>
+
+        <h2 id="source">Build from source</h2>
+        <p>Build the whole workspace when developing or when you need unreleased changes.</p>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">Terminal</span>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
+          <pre><code>git clone https://github.com/erikwang2013/druid-rust.git
+cd druid-rust
+cargo build --release
+cargo test --workspace
+cargo run --example basic</code></pre>
+        </div>
+        <p>Release builds enable LTO, <code>codegen-units = 1</code> and <code>opt-level = 3</code>.</p>
+
+        <h2 id="verify">Verify</h2>
+        <p>Run a quick compile check, then confirm the target crate is in the dependency tree.</p>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">Terminal</span>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
+          <pre><code>cargo check
+cargo tree -p druid-pool</code></pre>
+        </div>
+        <p>The full workspace test run should report 431 passing tests.</p>
+
+        <h2 id="faq">FAQ</h2>
+        <h3>Why does init fail when I set filters?</h3>
+        <p><code>DruidConfig::filters</code> is not wired. Use <code>DruidDataSource::with_filters(driver, config, filters)</code> to attach the chain at construction time.</p>
+        <h3>Why is valid SQL rejected by the firewall?</h3>
+        <p>The firewall is fail-closed, so syntax the parser does not yet support is rejected, including UNION, SHOW, USE, SET and EXPLAIN FORMAT=TREE. Set <code>deny_unparsable = false</code> only after reviewing the risk.</p>
+        <h3>Why does the console return 401?</h3>
+        <p>With <code>start_server_with_token()</code>, data and page endpoints require <code>Authorization: Bearer &lt;token&gt;</code>. Static pet assets stay public so the browser can load the favicon.</p>
+        <h3>Can I use sqlx or tokio-postgres directly?</h3>
+        <p>The project defines its own async <code>Driver</code> and <code>Connection</code> traits and does not bundle an ORM. Write a small adapter from your database client to those traits.</p>
+
+        <h2 id="next">Next steps</h2>
+        <p>Once installed, start with the pool, firewall, monitoring and console scenarios.</p>
+        <p><a class="text-link" href="/druid-rust/en/usage.html">Read the usage guide →</a></p>
+        <p><a class="text-link" href="https://github.com/erikwang2013/druid-rust/blob/main/docs/README_EN.md" target="_blank" rel="noopener">Read the full README →</a></p>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/druid-rust/en/">
+          <img src="/druid-rust/assets/en/mascot.svg" width="32" height="32" alt="">
+          <span>Druid<span class="brand-accent">-Rust</span></span>
+        </a>
+        <p>Rust port of Alibaba Druid. Async pooling, SQL parsing, an AST firewall and live metrics in one API.</p>
+        <p class="footer-author">Author <a href="https://erik.xyz" target="_blank" rel="noopener">Erik</a></p>
+        <p class="footer-support">Support <a href="/druid-rust/assets/en/weixinpay.png" data-lightbox data-title="WeChat Pay">WeChat</a><span aria-hidden="true"> / </span><a href="/druid-rust/assets/en/alipay.png" data-lightbox data-title="Alipay">Alipay</a></p>
+      </div>
+      <div class="footer-col">
+        <h2>Docs</h2>
+        <a href="/druid-rust/en/about.html">About</a>
+        <a href="/druid-rust/en/features.html">Features</a>
+        <a href="/druid-rust/en/changelog.html">Changelog</a>
+        <a href="/druid-rust/en/install.html">Install</a>
+        <a href="/druid-rust/en/usage.html">Usage</a>
+      </div>
+      <div class="footer-col">
+        <h2>Resources</h2>
+        <a href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/docs/README_EN.md" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
+        <a href="https://crates.io/crates/druid-pool" target="_blank" rel="noopener">crates.io</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 <a href="https://erik.xyz" target="_blank" rel="noopener">Erik</a> · Apache-2.0</p>
+      <div class="footer-info" id="busuanzi"><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script> <span id="busuanzi_container_page_pv"><span data-i18n="post.readA">Read</span> <b id="busuanzi_value_page_pv">0</b> <span data-i18n="post.readB">times 👀</span></span></div>
+    </div>
+  </footer>
+
+  <a class="to-top" href="#top" aria-label="Back to top">
+    <img src="/druid-rust/assets/en/pet/smile.svg" width="52" height="52" alt="">
+  </a>
+
+  <script defer src="/druid-rust/assets/js/site.js"></script>
+  <script defer src="/druid-rust/assets/js/search.js"></script>
+</body>
+</html>

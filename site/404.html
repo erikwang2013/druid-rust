@@ -7,9 +7,13 @@
   <meta name="description" content="页面没有找到。回到 Druid-Rust 首页，或者从安装文档开始。">
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#071420">
+  <link rel="alternate" hreflang="zh-CN" href="https://package.erik.xyz/druid-rust/404.html">
+  <link rel="alternate" hreflang="en" href="https://package.erik.xyz/druid-rust/en/404.html">
+  <link rel="alternate" hreflang="x-default" href="https://package.erik.xyz/druid-rust/404.html">
   <link rel="icon" href="/druid-rust/assets/mascot.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/druid-rust/assets/css/base.css">
   <link rel="stylesheet" href="/druid-rust/assets/css/pages.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/search.css">
 </head>
 <body id="top">
   <a class="skip-link" href="#main">跳到主要内容</a>
@@ -20,9 +24,6 @@
         <img src="/druid-rust/assets/mascot.svg" width="32" height="32" alt="">
         <span>Druid<span class="brand-accent">-Rust</span></span>
       </a>
-      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开导航">
-        <span></span><span></span><span></span>
-      </button>
       <nav class="site-nav" id="site-nav" aria-label="主导航">
         <a href="/druid-rust/">首页</a>
         <a href="/druid-rust/about.html">项目介绍</a>
@@ -32,6 +33,18 @@
         <a href="/druid-rust/usage.html">使用</a>
         <a class="nav-github" href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
       </nav>
+      <div class="header-tools">
+        <button class="search-btn" type="button" aria-label="搜索文档" aria-haspopup="dialog">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+          <span class="search-label">搜索</span>
+          <kbd>/</kbd>
+        </button>
+        <a class="lang-switch" href="/druid-rust/en/404.html" hreflang="en" lang="en" aria-label="切换到英文">EN</a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开导航">
+        <span></span><span></span><span></span>
+      </button>
+      </div>
+
     </div>
   </header>
   <div class="top-sentinel" aria-hidden="true"></div>
@@ -89,8 +102,14 @@
     <img src="/druid-rust/assets/pet/smile.svg" width="52" height="52" alt="">
   </a>
 
+  <script>
+    if (location.pathname === '/druid-rust/en' || location.pathname.indexOf('/druid-rust/en/') === 0) {
+      location.replace('/druid-rust/en/404.html');
+    }
+  </script>
   <script defer src="/druid-rust/assets/vendor/three.min.js"></script>
   <script defer src="/druid-rust/assets/js/pool-scene.js"></script>
   <script defer src="/druid-rust/assets/js/site.js"></script>
+  <script defer src="/druid-rust/assets/js/search.js"></script>
 </body>
 </html>

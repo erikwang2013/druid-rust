@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" width="1000" height="620" role="img" aria-labelledby="drFeatTitle drFeatDesc">
+  <title id="drFeatTitle">Druid-Rust Features</title>
+  <desc id="drFeatDesc">Six capability domains: connection pool core, SQL parsing, firewall, monitoring, pluggable filters, high availability and proxy.</desc>
+
+  <rect x="0" y="0" width="1000" height="620" rx="14" fill="#0b1b2b"/>
+  <rect x="0.5" y="0.5" width="999" height="619" rx="13.5" fill="none" stroke="#1e3a5f"/>
+
+  <text x="32" y="46" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="20" font-weight="700" fill="#e2e8f0">Druid-Rust Features</text>
+  <text x="32" y="70" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="12" fill="#7c93a8">Six capability domains · pool at the core · Filter chain for extension</text>
+
+  <rect x="24" y="96" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#4ade80" stroke-opacity=".38"/>
+  <rect x="44" y="116" width="34" height="3" rx="1.5" fill="#4ade80"/>
+  <text x="44" y="146" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#4ade80">druid-pool</text>
+  <text x="44" y="164" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">Connection pool core</text>
+  <line x1="44" y1="178" x2="304" y2="178" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="50" cy="196" r="2.5" fill="#4ade80" fill-opacity=".75"/><text x="62" y="200">Semaphore concurrency control</text>
+    <circle cx="50" cy="224" r="2.5" fill="#4ade80" fill-opacity=".75"/><text x="62" y="228">PoolGuard RAII auto-return</text>
+    <circle cx="50" cy="252" r="2.5" fill="#4ade80" fill-opacity=".75"/><text x="62" y="256">Idle eviction + KeepAlive</text>
+    <circle cx="50" cy="280" r="2.5" fill="#4ade80" fill-opacity=".75"/><text x="62" y="284">PSCache prepared statements</text>
+    <circle cx="50" cy="308" r="2.5" fill="#4ade80" fill-opacity=".75"/><text x="62" y="312">Borrow timeout · validation</text>
+  </g>
+
+  <rect x="344" y="96" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#22d3ee" stroke-opacity=".38"/>
+  <rect x="364" y="116" width="34" height="3" rx="1.5" fill="#22d3ee"/>
+  <text x="364" y="146" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#22d3ee">druid-sql</text>
+  <text x="364" y="164" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">SQL parser</text>
+  <line x1="364" y1="178" x2="624" y2="178" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="370" cy="196" r="2.5" fill="#22d3ee" fill-opacity=".75"/><text x="382" y="200">Lexer: 80+ tokens</text>
+    <circle cx="370" cy="224" r="2.5" fill="#22d3ee" fill-opacity=".75"/><text x="382" y="228">Recursive-descent parser + AST</text>
+    <circle cx="370" cy="252" r="2.5" fill="#22d3ee" fill-opacity=".75"/><text x="382" y="256">22 expressions · 6 statements</text>
+    <circle cx="370" cy="280" r="2.5" fill="#22d3ee" fill-opacity=".75"/><text x="382" y="284">30 database dialects</text>
+    <circle cx="370" cy="308" r="2.5" fill="#22d3ee" fill-opacity=".75"/><text x="382" y="312">Schema extraction · formatting</text>
+  </g>
+
+  <rect x="664" y="96" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#fbbf24" stroke-opacity=".38"/>
+  <rect x="684" y="116" width="34" height="3" rx="1.5" fill="#fbbf24"/>
+  <text x="684" y="146" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#fbbf24">druid-wall</text>
+  <text x="684" y="164" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">SQL firewall</text>
+  <line x1="684" y1="178" x2="944" y2="178" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="690" cy="196" r="2.5" fill="#fbbf24" fill-opacity=".75"/><text x="702" y="200">Dangerous operation denylist</text>
+    <circle cx="690" cy="224" r="2.5" fill="#fbbf24" fill-opacity=".75"/><text x="702" y="228">UPDATE / DELETE require WHERE</text>
+    <circle cx="690" cy="252" r="2.5" fill="#fbbf24" fill-opacity=".75"/><text x="702" y="256">Block SELECT INTO OUTFILE</text>
+    <circle cx="690" cy="280" r="2.5" fill="#fbbf24" fill-opacity=".75"/><text x="702" y="284">Multi-statement · length limits</text>
+    <circle cx="690" cy="308" r="2.5" fill="#fbbf24" fill-opacity=".75"/><text x="702" y="312">LRU 512-result check cache</text>
+  </g>
+
+  <rect x="24" y="344" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#f472b6" stroke-opacity=".38"/>
+  <rect x="44" y="364" width="34" height="3" rx="1.5" fill="#f472b6"/>
+  <text x="44" y="394" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#f472b6">druid-stat</text>
+  <text x="44" y="412" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">Monitoring</text>
+  <line x1="44" y1="426" x2="304" y2="426" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="50" cy="444" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="448">SQL count / latency / errors</text>
+    <circle cx="50" cy="472" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="476">Slow SQL detection + tracing</text>
+    <circle cx="50" cy="500" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="504">Live pool metrics</text>
+    <circle cx="50" cy="528" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="532">Lock-free AtomicU64 counters</text>
+    <circle cx="50" cy="556" r="2.5" fill="#f472b6" fill-opacity=".75"/><text x="62" y="560">axum console + JSON APIs + pet moods</text>
+  </g>
+
+  <rect x="344" y="344" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#a78bfa" stroke-opacity=".38"/>
+  <rect x="364" y="364" width="34" height="3" rx="1.5" fill="#a78bfa"/>
+  <text x="364" y="394" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#a78bfa">druid-filter</text>
+  <text x="364" y="412" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">Pluggable architecture</text>
+  <line x1="364" y1="426" x2="624" y2="426" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="370" cy="444" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="448">Filter trait 20+ hooks</text>
+    <circle cx="370" cy="472" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="476">FilterAdapter no-op defaults</text>
+    <circle cx="370" cy="500" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="504">FilterChain responsibility chain</text>
+    <circle cx="370" cy="528" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="532">Custom filter extension</text>
+    <circle cx="370" cy="556" r="2.5" fill="#a78bfa" fill-opacity=".75"/><text x="382" y="560">Construction-time injection</text>
+  </g>
+
+  <rect x="664" y="344" width="300" height="228" rx="12" fill="#ffffff" fill-opacity=".03" stroke="#38bdf8" stroke-opacity=".38"/>
+  <rect x="684" y="364" width="34" height="3" rx="1.5" fill="#38bdf8"/>
+  <text x="684" y="394" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="15" font-weight="700" fill="#38bdf8">druid-ha</text>
+  <text x="684" y="412" font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="10.5" fill="#7c93a8">High availability and proxy</text>
+  <line x1="684" y1="426" x2="944" y2="426" stroke="#ffffff" stroke-opacity=".08"/>
+  <g font-family="ui-sans-serif, 'PingFang SC', sans-serif" font-size="11.5" fill="#cbd5e1">
+    <circle cx="690" cy="444" r="2.5" fill="#38bdf8" fill-opacity=".75"/><text x="702" y="448">Weighted round-robin sources</text>
+    <circle cx="690" cy="472" r="2.5" fill="#38bdf8" fill-opacity=".75"/><text x="702" y="476">Async health checks</text>
+    <circle cx="690" cy="500" r="2.5" fill="#38bdf8" fill-opacity=".75"/><text x="702" y="504">Automatic failover</text>
+    <circle cx="690" cy="528" r="2.5" fill="#38bdf8" fill-opacity=".75"/><text x="702" y="532">mark_down / mark_up</text>
+    <circle cx="690" cy="556" r="2.5" fill="#38bdf8" fill-opacity=".75"/><text x="702" y="560">ProxyConnection interception</text>
+  </g>
+</svg>
