@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Druid-Rust · 为 Rust 而生的异步数据库连接池</title>
+  <meta name="description" content="Druid-Rust 是 Alibaba Druid 的 Rust 移植版，提供异步连接池、SQL 解析、AST 防火墙、监控统计与高可用。">
+  <meta name="theme-color" content="#071420">
+  <meta property="og:title" content="Druid-Rust · 为 Rust 而生的异步数据库连接池">
+  <meta property="og:description" content="连接池、SQL 解析、AST 防火墙、监控与高可用，一套 API 全部就位。">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://package.erik.xyz/druid-rust/">
+  <meta property="og:url" content="https://package.erik.xyz/druid-rust/">
+  <meta property="og:site_name" content="Druid-Rust">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:image" content="https://package.erik.xyz/druid-rust/assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Druid-Rust 项目横幅">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Druid-Rust · 为 Rust 而生的异步数据库连接池">
+  <meta name="twitter:description" content="连接池、SQL 解析、AST 防火墙、监控与高可用，一套 API 全部就位。">
+  <meta name="twitter:image" content="https://package.erik.xyz/druid-rust/assets/social-preview.png">
+  <meta name="author" content="艾瑞可erik">
+  <meta name="keywords" content="Druid-Rust,Rust 连接池,数据库连接池,SQL 解析,SQL 防火墙,Alibaba Druid,异步连接池">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="applicable-device" content="pc,mobile">
+  <link rel="icon" href="/druid-rust/assets/mascot.svg" type="image/svg+xml">
+  <link rel="preload" href="/druid-rust/assets/mascot.svg" as="image" type="image/svg+xml">
+  <link rel="stylesheet" href="/druid-rust/assets/css/base.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/pages.css">
+  <script type="application/ld+json">
+
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "name": "Druid-Rust",
+      "description": "Alibaba Druid 的 Rust 移植版，提供异步连接池、SQL 解析、AST 防火墙、监控统计与高可用。",
+      "inLanguage": "zh-CN",
+      "author": {
+        "@type": "Person",
+        "name": "艾瑞可erik",
+        "url": "https://erik.xyz"
+      },
+      "url": "https://package.erik.xyz/druid-rust/"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Druid-Rust",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux, macOS, Windows",
+      "softwareVersion": "1.4.0",
+      "programmingLanguage": "Rust",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "codeRepository": "https://github.com/erikwang2013/druid-rust",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "CNY"
+      },
+      "author": {
+        "@type": "Person",
+        "name": "艾瑞可erik",
+        "url": "https://erik.xyz"
+      },
+      "url": "https://package.erik.xyz/druid-rust/"
+    }
+  ]
+}
+  
+  </script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/druid-rust/" aria-label="Druid-Rust 首页">
+        <img src="/druid-rust/assets/mascot.svg" width="32" height="32" alt="">
+        <span>Druid<span class="brand-accent">-Rust</span></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开导航">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="主导航">
+        <a href="/druid-rust/" class="is-active" aria-current="page">首页</a>
+        <a href="/druid-rust/about.html">项目介绍</a>
+        <a href="/druid-rust/features.html">功能迭代</a>
+        <a href="/druid-rust/changelog.html">版本日志</a>
+        <a href="/druid-rust/install.html">安装</a>
+        <a href="/druid-rust/usage.html">使用</a>
+        <a class="nav-github" href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+  <div class="top-sentinel" aria-hidden="true"></div>
+
+  <main id="main">
+    <section class="hero">
+      <div class="hero-bg" aria-hidden="true"><canvas id="pool-canvas"></canvas></div>
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Alibaba Druid · Rust Port</p>
+          <h1>为 Rust 打造的<br>异步数据库连接池</h1>
+          <p class="lead">连接池、SQL 解析、AST 防火墙、监控与高可用，一套 API 全部就位。</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="/druid-rust/install.html">快速开始</a>
+            <a class="btn btn-ghost" href="/druid-rust/usage.html">阅读使用文档</a>
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="pet-orbit">
+            <img src="/druid-rust/assets/mascot.svg" width="280" height="280" alt="">
+            <span class="float-chip chip-a">druid-pool</span>
+            <span class="float-chip chip-b">druid-wall</span>
+            <span class="float-chip chip-c">druid-stat</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats-band" aria-label="项目数据">
+      <div class="container stats-grid">
+        <div><strong>10</strong><span>crate 模块</span></div>
+        <div><strong>431</strong><span>测试通过</span></div>
+        <div><strong>30</strong><span>数据库方言</span></div>
+        <div><strong>12</strong><span>小德表情形态</span></div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="architecture">
+      <div class="container">
+        <div class="section-head">
+          <h2>连接池是核心，其余能力围绕它生长</h2>
+          <p>10 个 crate 分成 7 层，依赖单向向下。上层可以依赖下层，下层永不反向依赖上层。</p>
+        </div>
+        <div class="bento">
+          <figure class="bento-media">
+            <img src="/druid-rust/assets/architecture.svg" width="1000" height="620" alt="Druid-Rust 七层架构图，从基础设施到控制台共 10 个 crate" loading="lazy" decoding="async">
+            <figcaption>七层架构 · 10 个 crate · 依赖单向向下</figcaption>
+          </figure>
+          <div class="bento-stack">
+            <article class="bento-tile">
+              <h3>druid-pool</h3>
+              <p>Semaphore 精确并发控制、PoolGuard RAII 自动归还、空闲驱逐与 KeepAlive 保活。</p>
+            </article>
+            <article class="bento-tile">
+              <h3>druid-wall</h3>
+              <p>AST 级 SQL 防火墙，解析失败默认拒绝，拦住注入、危险操作与无 WHERE 的更新。</p>
+            </article>
+            <article class="bento-tile">
+              <h3>druid-stat</h3>
+              <p>每条 SQL 的次数、耗时、错误与慢查询都在视野内，lock-free 指标可对接 Prometheus。</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="capabilities">
+      <div class="container">
+        <div class="section-head">
+          <h2>六块能力，一个依赖图</h2>
+          <p>从连接生命周期到 SQL 语义分析，每一块都能独立使用，也能通过 Filter 责任链组合。</p>
+        </div>
+        <div class="feature-list">
+          <article class="feature-row">
+            <span class="feature-index">01</span>
+            <h3>异步连接池</h3>
+            <p>基于 tokio 的全链路异步 I/O，支持预热、获取超时、借还验证、空闲驱逐与 KeepAlive。</p>
+            <span class="crate-tag">druid-pool</span>
+          </article>
+          <article class="feature-row">
+            <span class="feature-index">02</span>
+            <h3>SQL 解析器</h3>
+            <p>80+ Token 词法分析、递归下降 Parser、22 种表达式与 30 种数据库方言适配。</p>
+            <span class="crate-tag">druid-sql</span>
+          </article>
+          <article class="feature-row">
+            <span class="feature-index">03</span>
+            <h3>SQL 防火墙</h3>
+            <p>操作黑名单、危险函数、强制 WHERE、文件写入与多语句检查，默认 fail-closed。</p>
+            <span class="crate-tag">druid-wall</span>
+          </article>
+          <article class="feature-row">
+            <span class="feature-index">04</span>
+            <h3>监控统计</h3>
+            <p>SQL 执行画像、慢 SQL 告警、连接池实时指标，全部通过 AtomicU64 无锁累加。</p>
+            <span class="crate-tag">druid-stat</span>
+          </article>
+          <article class="feature-row">
+            <span class="feature-index">05</span>
+            <h3>高可用与代理</h3>
+            <p>加权轮询多数据源、异步健康检查、自动故障切换，代理层拦截连接与语句。</p>
+            <span class="crate-tag">druid-ha</span>
+          </article>
+          <article class="feature-row">
+            <span class="feature-index">06</span>
+            <h3>Web 控制台</h3>
+            <p>axum 驱动的监控页面与 JSON 接口，页头会根据状态切换小德的表情。</p>
+            <span class="crate-tag">druid-console</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="quickstart">
+      <div class="container split">
+        <div>
+          <h2>三分钟接入</h2>
+          <p class="lead">把依赖加进 Cargo.toml，实现 <code>Driver</code> 与 <code>Connection</code> trait，驱动由你选择。</p>
+          <a class="text-link" href="/druid-rust/install.html">完整安装文档 →</a>
+          <div class="note tip" style="margin-top: 22px;">
+            <strong>提示：</strong>SQL 需要走 <code>guard.execute()</code> 或 <code>guard.query()</code>，防火墙与统计才会被调用。
+          </div>
+        </div>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">Cargo.toml</span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+          <pre><code><span class="c"># 按需引入，版本统一为 1.4</span>
+[dependencies]
+druid-core = "1.4"
+druid-pool = "1.4"
+druid-wall = "1.4"
+druid-stat = "1.4"
+tokio = { version = "1", features = ["full"] }</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section pet-section reveal" id="pet">
+      <div class="container">
+        <div class="pet-head">
+          <div class="section-head" style="margin-bottom: 0;">
+            <h2>认识小德，连接池的守夜人</h2>
+            <p>德鲁伊猫头鹰是项目唯一的吉祥物。它守着连接池，也替防火墙盯着每一条 SQL。</p>
+          </div>
+          <img src="/druid-rust/assets/pet/coquettish.svg" width="96" height="96" alt="小德撒娇表情" loading="lazy">
+        </div>
+        <ul class="pet-strip">
+          <li class="pet-card"><img src="/druid-rust/assets/pet/smile.svg" width="76" height="76" alt="小德微笑表情" loading="lazy"><b>微笑</b><span>:smile:</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/pet/joy.svg" width="76" height="76" alt="小德欢乐表情" loading="lazy"><b>欢乐</b><span>:joy:</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/pet/cute.svg" width="76" height="76" alt="小德卖萌表情" loading="lazy"><b>卖萌</b><span>:cute:</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/pet/knocking.svg" width="76" height="76" alt="小德敲打表情" loading="lazy"><b>敲打</b><span>:knocking:</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/pet/cry.svg" width="76" height="76" alt="小德哭泣表情" loading="lazy"><b>哭</b><span>:cry:</span></li>
+          <li class="pet-card"><img src="/druid-rust/assets/pet/tongue.svg" width="76" height="76" alt="小德吐舌头表情" loading="lazy"><b>吐舌头</b><span>:tongue:</span></li>
+        </ul>
+        <p style="margin-top: 22px;"><a class="text-link" href="/druid-rust/about.html#pet">查看全部 12 种表情 →</a></p>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="container cta-inner">
+        <div>
+          <h2>连接池的事，交给小德</h2>
+          <p>Apache-2.0 许可，10 个 crate 可独立引入。</p>
+        </div>
+        <div class="cta-actions">
+          <a class="btn btn-primary" href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">在 GitHub 查看源码</a>
+          <a class="btn btn-ghost" href="/druid-rust/changelog.html">查看版本日志</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/druid-rust/">
+          <img src="/druid-rust/assets/mascot.svg" width="32" height="32" alt="">
+          <span>Druid<span class="brand-accent">-Rust</span></span>
+        </a>
+        <p>Alibaba Druid 的 Rust 移植版。异步连接池、SQL 解析、AST 防火墙与实时监控，一套 API 全部就位。</p>
+        <p class="footer-author" style="margin-top: 12px;">作者 <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a></p>
+        <p class="footer-support">打赏 <a href="/druid-rust/assets/weixinpay.png" data-lightbox data-title="微信打赏">微信</a><span aria-hidden="true"> / </span><a href="/druid-rust/assets/alipay.png" data-lightbox data-title="支付宝打赏">支付宝</a></p>
+      </div>
+      <div class="footer-col">
+        <h2>文档</h2>
+        <a href="/druid-rust/about.html">项目介绍</a>
+        <a href="/druid-rust/features.html">功能迭代</a>
+        <a href="/druid-rust/changelog.html">版本日志</a>
+        <a href="/druid-rust/install.html">安装文档</a>
+        <a href="/druid-rust/usage.html">使用说明</a>
+      </div>
+      <div class="footer-col">
+        <h2>资源</h2>
+        <a href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/README.md" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
+        <a href="https://crates.io/crates/druid-pool" target="_blank" rel="noopener">crates.io</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a> · Apache-2.0</p>
+      <div class="footer-info" id="busuanzi"><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script> <span id="busuanzi_container_page_pv"><span data-i18n="post.readA">阅读</span> <b id="busuanzi_value_page_pv">0</b> <span data-i18n="post.readB">次 👀</span></span></div>
+    </div>
+  </footer>
+
+  <a class="to-top" href="#top" aria-label="返回顶部">
+    <img src="/druid-rust/assets/pet/smile.svg" width="52" height="52" alt="">
+  </a>
+
+  <script defer src="/druid-rust/assets/vendor/three.min.js"></script>
+  <script defer src="/druid-rust/assets/js/pool-scene.js"></script>
+  <script defer src="/druid-rust/assets/js/site.js"></script>
+</body>
+</html>

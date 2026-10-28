@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>版本日志 · Druid-Rust</title>
+  <meta name="description" content="Druid-Rust 版本日志：从 1.1.0 到 1.4.0 的功能、修复与安全变更。">
+  <meta name="theme-color" content="#071420">
+  <meta property="og:title" content="版本日志 · Druid-Rust">
+  <meta property="og:description" content="逐版本记录 Druid-Rust 的功能、修复与安全变更。">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://package.erik.xyz/druid-rust/changelog.html">
+  <meta property="og:url" content="https://package.erik.xyz/druid-rust/changelog.html">
+  <meta property="og:site_name" content="Druid-Rust">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:image" content="https://package.erik.xyz/druid-rust/assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Druid-Rust 项目横幅">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="版本日志 · Druid-Rust">
+  <meta name="twitter:description" content="逐版本记录 Druid-Rust 的功能、修复与安全变更。">
+  <meta name="twitter:image" content="https://package.erik.xyz/druid-rust/assets/social-preview.png">
+  <meta name="author" content="艾瑞可erik">
+  <meta name="keywords" content="Druid-Rust,版本日志,CHANGELOG,更新记录">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="applicable-device" content="pc,mobile">
+  <link rel="icon" href="/druid-rust/assets/mascot.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/druid-rust/assets/css/base.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/pages.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/docs.css">
+  <script type="application/ld+json">
+
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "inLanguage": "zh-CN",
+  "author": {
+    "@type": "Person",
+    "name": "艾瑞可erik",
+    "url": "https://erik.xyz"
+  },
+  "about": {
+    "@type": "SoftwareApplication",
+    "name": "Druid-Rust",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows",
+    "softwareVersion": "1.4.0",
+    "programmingLanguage": "Rust",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "codeRepository": "https://github.com/erikwang2013/druid-rust",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "CNY"
+    },
+    "author": {
+      "@type": "Person",
+      "name": "艾瑞可erik",
+      "url": "https://erik.xyz"
+    },
+    "url": "https://package.erik.xyz/druid-rust/"
+  },
+  "name": "版本日志 · Druid-Rust",
+  "description": "逐版本记录 Druid-Rust 的功能、修复与安全变更。",
+  "headline": "版本日志 · Druid-Rust",
+  "url": "https://package.erik.xyz/druid-rust/changelog.html"
+}
+  
+  </script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/druid-rust/" aria-label="Druid-Rust 首页">
+        <img src="/druid-rust/assets/mascot.svg" width="32" height="32" alt="">
+        <span>Druid<span class="brand-accent">-Rust</span></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开导航">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="主导航">
+        <a href="/druid-rust/">首页</a>
+        <a href="/druid-rust/about.html">项目介绍</a>
+        <a href="/druid-rust/features.html">功能迭代</a>
+        <a href="/druid-rust/changelog.html" class="is-active" aria-current="page">版本日志</a>
+        <a href="/druid-rust/install.html">安装</a>
+        <a href="/druid-rust/usage.html">使用</a>
+        <a class="nav-github" href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+  <div class="top-sentinel" aria-hidden="true"></div>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container page-hero-inner">
+        <div>
+          <p class="eyebrow">版本日志</p>
+          <h1>每次发版<br>都写清楚改了什么</h1>
+          <p class="lead">功能、修复、破坏性变更与安全边界，按版本归档。完整原文见仓库 CHANGELOG.md。</p>
+        </div>
+        <img class="page-pet" src="/druid-rust/assets/pet/knocking.svg" width="120" height="120" alt="小德敲打表情">
+      </div>
+    </section>
+
+    <div class="container docs-layout">
+      <aside class="toc" aria-label="版本目录">
+        <h2>版本</h2>
+        <a href="#v1-4-0">1.4.0</a>
+        <a href="#v1-3-1">1.3.1</a>
+        <a href="#v1-3-0">1.3.0</a>
+        <a href="#v1-2-0">1.2.0</a>
+        <a href="#v1-1-9">1.1.9</a>
+        <a href="#v1-1-8">1.1.8</a>
+        <a href="#v1-1-0">1.1.0</a>
+      </aside>
+
+      <article class="docs-body">
+        <details class="release" id="v1-4-0" open>
+          <summary>v1.4.0 <span class="release-date">2026-10-19</span><span class="tag tag-added">Added</span><span class="tag tag-fixed">Fixed</span></summary>
+          <div class="release-body">
+            <p>功能版：宠物表情形态正式进入 druid-console，同时修复代理层语句钩子、鉴权下的 favicon 加载与 stable 工具链的 clippy 失败。测试总数 428 到 431。</p>
+            <h3>新增</h3>
+            <ul>
+              <li>12 个表情 SVG 移入 <code>druid-console/assets/pet-expressions/</code> 并随 crate 发布，新增 <code>GET /druid/pet/&lt;name&gt;.svg</code> 路由。</li>
+              <li>监控页头按状态自动切换表情：SQL 错误对应愤怒，慢 SQL 对应沮丧，池用满对应敲打，尚无执行对应卖萌，正常对应微笑。</li>
+              <li>防漂移测试保证 docs 与 crate 内副本字节一致，新增 GitHub Social Preview 图。</li>
+            </ul>
+            <h3>修复</h3>
+            <ul>
+              <li>代理层补齐 <code>statement_created</code>、<code>statement_error</code>、<code>statement_closed</code>，执行失败或被拦截时不再漏记错误。</li>
+              <li>鉴权开启后，<code>/druid/mascot.svg</code> 与 <code>/druid/pet/&lt;name&gt;.svg</code> 不再要求 Bearer token，favicon 不会 401。</li>
+              <li><code>WallProvider::new(..., 0)</code> 现在真正禁用缓存，与 PSCache 的 0=禁用语义一致。</li>
+              <li>适配 Rust 1.99 stable 的 clippy，迁移到 <code>Atomic::try_update</code>。</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-3-1">
+          <summary>v1.3.1 <span class="release-date">2026-10-01</span><span class="tag tag-security">Security</span><span class="tag tag-fixed">Fixed</span></summary>
+          <div class="release-body">
+            <p>1.3.0 发布当日的补丁。对抗验证又挖出 5 组配置 Debug 明文口令泄漏与 1 个打包缺陷。</p>
+            <h3>安全：DruidConfig 的 Debug 输出</h3>
+            <ul>
+              <li>userinfo 旁边的参数值：改为从右往左取第一个不在参数值里的 <code>@</code>，豁免只作用于分隔符本身。</li>
+              <li>scheme 段：按 <code>SAFE_SCHEME_LABELS</code> 白名单逐段比对，未知标签整段打码。</li>
+              <li>键名标签：值是否打码仍用子串判断，键名能否回显改为精确白名单。</li>
+              <li>收敛为一条原则：每一段都要判定，判定范围等于作用范围。</li>
+            </ul>
+            <h3>打包与发布</h3>
+            <ul>
+              <li>吉祥物资产移入 crate 目录，修复 <code>cargo package</code> 缺文件导致的编译失败，并加防漂移测试。</li>
+              <li><code>druid-wall</code> 与 <code>druid-console</code> 首次发布到 crates.io。</li>
+              <li>10 个 crate 补 <code>readme</code> 字段，crates.io 页面显示项目 README。</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-3-0">
+          <summary>v1.3.0 <span class="release-date">2026-10-01</span><span class="tag tag-breaking">Breaking</span><span class="tag tag-security">Security</span></summary>
+          <div class="release-body">
+            <p>深度审查与三轮对抗验证后的集中修复。核心结论：1.2.0 的 SQL 防火墙与统计在连接池路径上从不执行，因为 Filter 无处挂载，PoolGuard 只暴露裸连接。</p>
+            <h3>破坏性变更</h3>
+            <ul>
+              <li>防火墙默认 fail-closed：解析失败或语句类型无法识别的 SQL 一律拒绝。逃生开关为 <code>deny_unparsable = false</code>。</li>
+              <li><code>DruidConfig::filters</code> 非空时 <code>init()</code> 返回错误，请改用 <code>DruidDataSource::with_filters(...)</code>。</li>
+              <li><code>DruidError</code> 加 <code>#[non_exhaustive]</code>，下游穷尽 match 需要补 <code>_ =&gt;</code>。</li>
+              <li><code>max_lifetime_ms</code> 改为按物理连接创建时刻判定，原先按最近使用时刻，热点连接下实际从未生效。</li>
+              <li>非法配置如 <code>initial_size &gt; max_active</code> 现在由 <code>DruidConfig::validate()</code> 在 init 时报错。</li>
+              <li><code>druid-ha</code> 删除无消费者的 <code>NodeStatus::Testing</code>；<code>substitute_params</code> 标记 deprecated，请改用 <code>substitute_params_mysql</code>。</li>
+            </ul>
+            <h3>新增</h3>
+            <ul>
+              <li>构造期注入：<code>with_filters()</code> 与 <code>with_chain()</code>，链在包装为 Arc 前配置完成，无注册竞态。</li>
+              <li><code>PoolGuard::execute()</code> 与 <code>query()</code>：唯一会让 SQL 流经 Filter 链的入口，<code>connection()</code> 保留为绕过 Filter 的逃生通道。</li>
+              <li>补齐 5 个定义了却从不 dispatch 的生命周期钩子，新增 <code>impl Filter for Arc&lt;T&gt;</code>。</li>
+              <li>控制台 token 鉴权、常量时间比较、<code>Cache-Control: no-store</code>、SQL 接口分页。</li>
+              <li>防火墙 <code>deny_unparsable</code>、事务控制语句安全通道、更多 DenyOperation 归类。</li>
+              <li>解析器支持 <code>LIMIT offset, count</code>、<code>@var</code> 与 <code>EXPLAIN</code>。</li>
+              <li>高可用新增失败/成功阈值、探测超时与可停止的健康检查循环。</li>
+            </ul>
+            <h3>安全修复</h3>
+            <ul>
+              <li>防火墙解析失败只告警就放行、quick_check 的 deny 结果被丢弃，8 条绕过全部封堵。</li>
+              <li>函数黑名单不递归参数，<code>COALESCE(SLEEP(5),0)</code> 可绕过，现递归遍历。</li>
+              <li><code>CREATE TABLE ... DEFAULT (RAND())</code> 绕过，已在真机复现并封堵。</li>
+              <li>deny_keywords 两次被引号致盲，改为用词法器 token 流重建匹配文本。</li>
+              <li><code>substitute_params</code> 反斜杠注入，新增 MySQL 安全版本。</li>
+              <li>配置 Debug 明文口令泄漏，改为逐段白名单脱敏。</li>
+              <li>控制台无鉴权暴露 SQL 原文，增加 token 与回环地址建议。</li>
+              <li>crypto 未启用 zeroize feature，轮密钥与临时密钥未清零，现已启用。</li>
+            </ul>
+            <h3>正确性与并发修复</h3>
+            <ul>
+              <li>连接池取消安全：提前构造 pending guard，取消时不再泄漏物理连接。</li>
+              <li>修复 close 返回后仍创建并交付连接、归还校验窗口计数失真、close 不唤醒排队者。</li>
+              <li>KeepAlive 不再关掉正在使用的连接，校验期间与借用路径共用同一套状态语义。</li>
+              <li>修复 permit 先于连接归位释放导致物理连接数超过 max_active。</li>
+              <li><code>DruidDataSource</code> 增加 Drop，不再泄漏后台任务与空闲连接。</li>
+              <li>高可用修复节点卡死、巡检无单点超时、单次失败即判死、健康检查无法停止。</li>
+              <li>统计修复 SQL 表无上限、active/idle 单向漂移、持锁打印未截断 SQL。</li>
+              <li>解析器修复 NOT 优先级错误、递归无深度上限、达到迭代上限后静默截断、把 <code>--</code> 一律当注释。</li>
+              <li>格式化修复字符串不转义、CREATE TABLE 丢约束、二元运算缺括号、JOIN 输出字面量。</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-2-0">
+          <summary>v1.2.0 <span class="release-date">2026-09-26</span><span class="tag tag-added">Added</span><span class="tag tag-fixed">Fixed</span></summary>
+          <div class="release-body">
+            <h3>新增</h3>
+            <ul>
+              <li>项目宠物「小德」进入 README 与控制台，<code>/druid/mascot.svg</code> 同时作为站点 favicon。</li>
+              <li>架构设计图、功能设计图、连接生命周期图，以及 README 的宠物与生命周期章节。</li>
+              <li>控制台页头内联小德，不额外复制资产。</li>
+            </ul>
+            <h3>修复</h3>
+            <ul>
+              <li>CI 转绿：全量 rustfmt 与 clippy 清零。</li>
+              <li>Release workflow 改用 <code>gh release create --target</code>，修复 runner 无 git 身份导致的连续发版失败。</li>
+              <li>README 测试徽章与分布表更新为实测的 231 项。</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-1-9">
+          <summary>v1.1.9 <span class="release-date">2026-08-02</span><span class="tag tag-added">Added</span></summary>
+          <div class="release-body">
+            <ul>
+              <li>新增 CI workflow，覆盖 check、test、clippy、fmt 四个 job。</li>
+              <li>补上 LICENSE、CHANGELOG、CONTRIBUTING 与 README 支付二维码。</li>
+              <li>10 个子 crate 补齐 description、keywords、categories 元数据。</li>
+              <li>移除未使用的 sqlx、rand、tracing-subscriber 等依赖。</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-1-8">
+          <summary>v1.1.8 <span class="release-date">2026-08-02</span><span class="tag tag-added">Added</span><span class="tag tag-fixed">Fixed</span></summary>
+          <div class="release-body">
+            <ul>
+              <li>SQL 解析器、AST、格式化与 Visitor 支持 CTE/WITH。</li>
+              <li>KeepAlive 用 <code>(id, last_used_at)</code> 双条件驱逐修复 TOCTOU。</li>
+              <li>补齐缓存命中、等待数递减、创建与销毁计数，连接池指标更完整。</li>
+              <li>防火墙覆盖 GROUP BY、HAVING、ORDER BY、LIMIT、OFFSET 与子查询。</li>
+              <li>PoolGuard 改为面向 Driver 泛型以支持归还验证，DROP 语句解析补齐 advance。</li>
+              <li>移除 NationalString 与 Whitespace 两个死 Token。</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="release" id="v1-1-0">
+          <summary>v1.1.0 <span class="release-date">2026-07-31</span><span class="tag tag-added">Initial</span></summary>
+          <div class="release-body">
+            <ul>
+              <li>首次发布 10 个 crate。</li>
+              <li>基于 Semaphore 的异步连接池，支持驱逐、KeepAlive 与 PSCache。</li>
+              <li>SQL 词法器、递归下降 Parser 与 30 种数据库方言。</li>
+              <li>AST 级 SQL 防火墙、慢 SQL 检测、加权轮询高可用。</li>
+              <li>axum Web 控制台、Filter 责任链、AES-256-GCM 工具。</li>
+              <li>61 项单元与集成测试。</li>
+            </ul>
+          </div>
+        </details>
+
+        <p style="margin-top: 28px;">完整原文：<a class="text-link" href="https://github.com/erikwang2013/druid-rust/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG.md →</a></p>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/druid-rust/">
+          <img src="/druid-rust/assets/mascot.svg" width="32" height="32" alt="">
+          <span>Druid<span class="brand-accent">-Rust</span></span>
+        </a>
+        <p>Alibaba Druid 的 Rust 移植版。异步连接池、SQL 解析、AST 防火墙与实时监控，一套 API 全部就位。</p>
+        <p class="footer-author" style="margin-top: 12px;">作者 <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a></p>
+        <p class="footer-support">打赏 <a href="/druid-rust/assets/weixinpay.png" data-lightbox data-title="微信打赏">微信</a><span aria-hidden="true"> / </span><a href="/druid-rust/assets/alipay.png" data-lightbox data-title="支付宝打赏">支付宝</a></p>
+      </div>
+      <div class="footer-col">
+        <h2>文档</h2>
+        <a href="/druid-rust/about.html">项目介绍</a>
+        <a href="/druid-rust/features.html">功能迭代</a>
+        <a href="/druid-rust/changelog.html">版本日志</a>
+        <a href="/druid-rust/install.html">安装文档</a>
+        <a href="/druid-rust/usage.html">使用说明</a>
+      </div>
+      <div class="footer-col">
+        <h2>资源</h2>
+        <a href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/README.md" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
+        <a href="https://crates.io/crates/druid-pool" target="_blank" rel="noopener">crates.io</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a> · Apache-2.0</p>
+      <div class="footer-info" id="busuanzi"><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script> <span id="busuanzi_container_page_pv"><span data-i18n="post.readA">阅读</span> <b id="busuanzi_value_page_pv">0</b> <span data-i18n="post.readB">次 👀</span></span></div>
+    </div>
+  </footer>
+
+  <a class="to-top" href="#top" aria-label="返回顶部">
+    <img src="/druid-rust/assets/pet/smile.svg" width="52" height="52" alt="">
+  </a>
+
+  <script defer src="/druid-rust/assets/js/site.js"></script>
+</body>
+</html>

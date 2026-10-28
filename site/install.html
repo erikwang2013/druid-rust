@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>安装文档 · Druid-Rust</title>
+  <meta name="description" content="Druid-Rust 安装文档：环境要求、Cargo 依赖、最小示例、源码构建与常见问题。">
+  <meta name="theme-color" content="#071420">
+  <meta property="og:title" content="安装文档 · Druid-Rust">
+  <meta property="og:description" content="从 Cargo 依赖到源码构建，三步装好 Druid-Rust。">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://package.erik.xyz/druid-rust/install.html">
+  <meta property="og:url" content="https://package.erik.xyz/druid-rust/install.html">
+  <meta property="og:site_name" content="Druid-Rust">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:image" content="https://package.erik.xyz/druid-rust/assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Druid-Rust 项目横幅">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="安装文档 · Druid-Rust">
+  <meta name="twitter:description" content="从 Cargo 依赖到源码构建，三步装好 Druid-Rust。">
+  <meta name="twitter:image" content="https://package.erik.xyz/druid-rust/assets/social-preview.png">
+  <meta name="author" content="艾瑞可erik">
+  <meta name="keywords" content="Druid-Rust 安装,Cargo 依赖,Rust 连接池,快速开始">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="applicable-device" content="pc,mobile">
+  <link rel="icon" href="/druid-rust/assets/mascot.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/druid-rust/assets/css/base.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/pages.css">
+  <link rel="stylesheet" href="/druid-rust/assets/css/docs.css">
+  <script type="application/ld+json">
+
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "inLanguage": "zh-CN",
+  "author": {
+    "@type": "Person",
+    "name": "艾瑞可erik",
+    "url": "https://erik.xyz"
+  },
+  "about": {
+    "@type": "SoftwareApplication",
+    "name": "Druid-Rust",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows",
+    "softwareVersion": "1.4.0",
+    "programmingLanguage": "Rust",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "codeRepository": "https://github.com/erikwang2013/druid-rust",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "CNY"
+    },
+    "author": {
+      "@type": "Person",
+      "name": "艾瑞可erik",
+      "url": "https://erik.xyz"
+    },
+    "url": "https://package.erik.xyz/druid-rust/"
+  },
+  "name": "安装文档 · Druid-Rust",
+  "description": "从 Cargo 依赖到源码构建，三步装好 Druid-Rust。",
+  "headline": "安装文档 · Druid-Rust",
+  "url": "https://package.erik.xyz/druid-rust/install.html"
+}
+  
+  </script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">跳到主要内容</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/druid-rust/" aria-label="Druid-Rust 首页">
+        <img src="/druid-rust/assets/mascot.svg" width="32" height="32" alt="">
+        <span>Druid<span class="brand-accent">-Rust</span></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="打开导航">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav" aria-label="主导航">
+        <a href="/druid-rust/">首页</a>
+        <a href="/druid-rust/about.html">项目介绍</a>
+        <a href="/druid-rust/features.html">功能迭代</a>
+        <a href="/druid-rust/changelog.html">版本日志</a>
+        <a href="/druid-rust/install.html" class="is-active" aria-current="page">安装</a>
+        <a href="/druid-rust/usage.html">使用</a>
+        <a class="nav-github" href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+  <div class="top-sentinel" aria-hidden="true"></div>
+
+  <main id="main">
+    <section class="page-hero">
+      <div class="container page-hero-inner">
+        <div>
+          <p class="eyebrow">安装文档</p>
+          <h1>把连接池装进你的项目</h1>
+          <p class="lead">Druid-Rust 是一个 Rust workspace，核心 crate 可以单独引入，也可以按需组合防火墙、统计与控制台。</p>
+        </div>
+        <img class="page-pet" src="/druid-rust/assets/pet/pleasing.svg" width="120" height="120" alt="小德讨好表情">
+      </div>
+    </section>
+
+    <div class="container docs-layout">
+      <aside class="toc" aria-label="本文目录">
+        <h2>目录</h2>
+        <a href="#requirements">环境要求</a>
+        <a href="#dependencies">添加依赖</a>
+        <a href="#minimal">最小示例</a>
+        <a href="#source">从源码构建</a>
+        <a href="#verify">验证安装</a>
+        <a href="#faq">常见问题</a>
+        <a href="#next">下一步</a>
+      </aside>
+
+      <article class="docs-body">
+        <div class="note tip">
+          <strong>当前版本：</strong>1.4.0 · 431 项测试通过 · Apache-2.0。以下依赖版本统一使用 1.4。
+        </div>
+
+        <h2 id="requirements">环境要求</h2>
+        <ul>
+          <li>Rust stable 工具链，edition 2021。</li>
+          <li>tokio 异步运行时，示例使用 <code>features = ["full"]</code>。</li>
+          <li>一个可用的数据库，以及实现 <code>Driver</code> 与 <code>Connection</code> trait 的驱动适配层。项目不内置数据库驱动。</li>
+        </ul>
+        <p>如果你只需要 SQL 解析器或防火墙，可以单独引入对应 crate，不必使用连接池。</p>
+
+        <h2 id="dependencies">添加依赖</h2>
+        <p>在 <code>Cargo.toml</code> 中加入需要的 crate。最小组合是 <code>druid-core</code> 加 <code>druid-pool</code>。</p>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">Cargo.toml</span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+          <pre><code><span class="c"># 版本统一为 1.4</span>
+[dependencies]
+druid-core = "1.4"
+druid-pool = "1.4"
+druid-wall = "1.4"
+druid-stat = "1.4"
+tokio = { version = "1", features = ["full"] }</code></pre>
+        </div>
+        <p>也可以直接用 cargo add：</p>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">终端</span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+          <pre><code>cargo add druid-core druid-pool druid-wall druid-stat
+cargo add tokio --features full</code></pre>
+        </div>
+
+        <h2 id="minimal">最小示例</h2>
+        <p>创建数据源、预热连接、借出一个 guard，再让它自动归还。示例里的 <code>your_driver</code> 需要替换成你的驱动实现。</p>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">src/main.rs</span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+          <pre><code><span class="k">use</span> druid_core::DruidConfig;
+<span class="k">use</span> druid_pool::DruidDataSource;
+
+#[tokio::main]
+<span class="k">async fn</span> main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    <span class="k">let mut</span> config = DruidConfig::new(
+        <span class="s">"mysql://localhost:3306/mydb"</span>,
+        <span class="s">"root"</span>,
+        <span class="s">"password"</span>,
+    );
+    config.initial_size = 5;
+    config.max_active = 20;
+    config.min_idle = 3;
+
+    <span class="c">// your_driver 需要实现 druid_pool::Driver</span>
+    <span class="k">let</span> ds = DruidDataSource::new(your_driver, config);
+    ds.init().<span class="k">await</span>?;
+
+    <span class="k">let</span> guard = ds.get_connection().<span class="k">await</span>?;
+    <span class="c">// 通过 guard.execute() / guard.query() 执行 SQL，Filter 才会生效</span>
+    <span class="k">drop</span>(guard); <span class="c">// 自动归还</span>
+
+    ds.close().<span class="k">await</span>?;
+    Ok(())
+}</code></pre>
+        </div>
+        <div class="note">
+          <strong>注意：</strong><code>guard.connection()</code> 是绕过 Filter 的逃生通道。走它执行 SQL，防火墙与统计都不会生效。
+        </div>
+
+        <h2 id="source">从源码构建</h2>
+        <p>需要参与开发或使用未发布改动时，可以直接构建整个 workspace。</p>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">终端</span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+          <pre><code>git clone https://github.com/erikwang2013/druid-rust.git
+cd druid-rust
+cargo build --release
+cargo test --workspace
+cargo run --example basic</code></pre>
+        </div>
+        <p>Release 构建启用了 LTO、<code>codegen-units = 1</code> 与 <code>opt-level = 3</code>。</p>
+
+        <h2 id="verify">验证安装</h2>
+        <p>先做一次快速编译检查，再确认依赖树里出现了目标 crate。</p>
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">终端</span>
+            <button class="copy-btn" type="button">复制</button>
+          </div>
+          <pre><code>cargo check
+cargo tree -p druid-pool</code></pre>
+        </div>
+        <p>运行测试时，完整 workspace 应显示 431 项通过。测试分布可在 README 的「开发与测试」章节查看。</p>
+
+        <h2 id="faq">常见问题</h2>
+        <h3>配置了 filters 字段，为什么 init 报错？</h3>
+        <p><code>DruidConfig::filters</code> 从未接线。请改用 <code>DruidDataSource::with_filters(driver, config, filters)</code>，在构造期注入 Filter 链。</p>
+        <h3>合法 SQL 被防火墙拒绝？</h3>
+        <p>防火墙默认 fail-closed，解析器尚未支持的语法会被拒绝，例如 UNION、SHOW、USE、SET、EXPLAIN FORMAT=TREE。确认风险后再显式设置 <code>deny_unparsable = false</code>。</p>
+        <h3>控制台请求返回 401？</h3>
+        <p>使用 <code>start_server_with_token()</code> 后，数据与页面端点需要 <code>Authorization: Bearer &lt;token&gt;</code>。静态宠物资源仍然公开，便于浏览器加载 favicon。</p>
+        <h3>能直接使用 sqlx 或 tokio-postgres 吗？</h3>
+        <p>本项目定义了自己的异步 <code>Driver</code> 与 <code>Connection</code> trait，不依赖 JDBC，也不内置 ORM。你需要写一层驱动适配，把数据库客户端接到这两个 trait 上。</p>
+
+        <h2 id="next">下一步</h2>
+        <p>装好之后，从连接池、防火墙、监控与控制台四个场景开始。</p>
+        <p><a class="text-link" href="/druid-rust/usage.html">阅读使用说明 →</a></p>
+        <p><a class="text-link" href="https://github.com/erikwang2013/druid-rust/blob/main/README.md" target="_blank" rel="noopener">参考 README 原文 →</a></p>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/druid-rust/">
+          <img src="/druid-rust/assets/mascot.svg" width="32" height="32" alt="">
+          <span>Druid<span class="brand-accent">-Rust</span></span>
+        </a>
+        <p>Alibaba Druid 的 Rust 移植版。异步连接池、SQL 解析、AST 防火墙与实时监控，一套 API 全部就位。</p>
+        <p class="footer-author" style="margin-top: 12px;">作者 <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a></p>
+        <p class="footer-support">打赏 <a href="/druid-rust/assets/weixinpay.png" data-lightbox data-title="微信打赏">微信</a><span aria-hidden="true"> / </span><a href="/druid-rust/assets/alipay.png" data-lightbox data-title="支付宝打赏">支付宝</a></p>
+      </div>
+      <div class="footer-col">
+        <h2>文档</h2>
+        <a href="/druid-rust/about.html">项目介绍</a>
+        <a href="/druid-rust/features.html">功能迭代</a>
+        <a href="/druid-rust/changelog.html">版本日志</a>
+        <a href="/druid-rust/install.html">安装文档</a>
+        <a href="/druid-rust/usage.html">使用说明</a>
+      </div>
+      <div class="footer-col">
+        <h2>资源</h2>
+        <a href="https://github.com/erikwang2013/druid-rust" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/README.md" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/erikwang2013/druid-rust/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
+        <a href="https://crates.io/crates/druid-pool" target="_blank" rel="noopener">crates.io</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <p>© 2026 <a href="https://erik.xyz" target="_blank" rel="noopener">艾瑞可erik</a> · Apache-2.0</p>
+      <div class="footer-info" id="busuanzi"><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script> <span id="busuanzi_container_page_pv"><span data-i18n="post.readA">阅读</span> <b id="busuanzi_value_page_pv">0</b> <span data-i18n="post.readB">次 👀</span></span></div>
+    </div>
+  </footer>
+
+  <a class="to-top" href="#top" aria-label="返回顶部">
+    <img src="/druid-rust/assets/pet/smile.svg" width="52" height="52" alt="">
+  </a>
+
+  <script defer src="/druid-rust/assets/js/site.js"></script>
+</body>
+</html>
